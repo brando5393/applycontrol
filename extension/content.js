@@ -55,7 +55,9 @@ function extractLocation() {
 }
 
 function extractTitle() {
+  const h1 = pickFirstText(["h1", "[data-testid='job-title']", ".job-title", ".posting-headline h2"]);
   return (
+    h1 ||
     textFromMeta("og:title", "property") ||
     textFromMeta("twitter:title", "name") ||
     document.title ||
@@ -289,7 +291,13 @@ function detectJobPage() {
     host.includes("greenhouse.") ||
     host.includes("lever.")
   ) {
-    return true;
+    const hasDescription = !!document.querySelector(
+      "#jobDescriptionText, .jobsearch-jobDescriptionText, .show-more-less-html__markup, .description__text, .posting, .job-description, [data-testid='job-description'], [data-testid='jobDescription'], [data-automation-id='jobPostingDescription'], [data-automation-id='jobDescription']"
+    );
+    const hasApply = !!document.querySelector(
+      "button, a[href*='apply'], [data-automation-id='applyNowButton'], [data-test='apply']"
+    );
+    return hasDescription || hasApply;
   }
 
   const text = document.body ? document.body.innerText.toLowerCase() : "";
@@ -300,7 +308,9 @@ function detectJobPage() {
     "requirements",
     "qualifications"
   ];
-  return signals.some((s) => text.includes(s));
+  const signalHit = signals.some((s) => text.includes(s));
+  const description = extractDescription();
+  return signalHit && description.length > 120;
 }
 
 function extractPayload() {

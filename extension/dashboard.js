@@ -33,6 +33,11 @@ const el = {
   deleteConfirm: document.getElementById("delete-confirm"),
   deletePassword: document.getElementById("delete-password"),
   deleteStatus: document.getElementById("delete-status"),
+  deleteSuccessModal: document.getElementById("delete-success-modal"),
+  deleteSuccessClose: document.getElementById("delete-success-close"),
+  descriptionModal: document.getElementById("description-modal"),
+  descriptionContent: document.getElementById("description-content"),
+  descriptionClose: document.getElementById("description-close"),
   modal: document.getElementById("modal"),
   modalCancel: document.getElementById("modal-cancel"),
   modalConfirm: document.getElementById("modal-confirm"),
@@ -211,7 +216,11 @@ function updateUI(auth) {
   if (auth && auth.stale && el.syncStatus) {
     el.syncStatus.textContent = "Session expired. Please sign in again.";
   }
-  if (!signedIn) closeModal();
+  if (!signedIn) {
+    closeModal();
+    if (el.email) el.email.value = "";
+    if (el.password) el.password.value = "";
+  }
 }
 
 function renderStatusFilters() {
@@ -239,6 +248,7 @@ function parseFirestoreDoc(doc) {
     location: fields.location ? fields.location.stringValue || "" : "",
     source: fields.source ? fields.source.stringValue || "" : "",
     status: fields.status ? fields.status.stringValue || "applied" : "applied",
+    description: fields.description ? fields.description.stringValue || "" : "",
     captured_at: fields.captured_at
       ? new Date(fields.captured_at.timestampValue)
       : null
@@ -298,6 +308,12 @@ function renderList() {
         <a href="${app.url}" target="_blank" rel="noreferrer">Open</a>
       </div>
       <div>
+        <button class="button secondary tiny" data-desc="${app.id}">
+          <span class="material-symbols-outlined icon">subject</span>
+          View
+        </button>
+      </div>
+      <div>
         <button
           class="button alert tiny"
           data-delete-id="${app.id}"
@@ -316,6 +332,16 @@ function renderList() {
     el.list.appendChild(row);
   }
 
+  const descButtons = el.list.querySelectorAll("[data-desc]");
+  descButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-desc");
+      const app = cachedApps.find((a) => a.id === id);
+      const text = app && app.description ? app.description : "No description saved.";
+      openDescriptionModal(text);
+    });
+  });
+
   const deleteButtons = el.list.querySelectorAll("[data-delete-id]");
   deleteButtons.forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -328,6 +354,21 @@ function renderList() {
       }
     });
   });
+}
+
+function sanitizeText(value, { preserveLineBreaks = true } = {}) {
+  if (value == null) return "";
+  let text = String(value);
+  text = text.replace(/\u0000/g, "");
+  text = text.replace(/\r\n/g, "\n");
+  text = text.replace(/[ \t]+\n/g, "\n");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  text = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  text = text.trim();
+  if (!preserveLineBreaks) {
+    text = text.replace(/\s+/g, " ");
+  }
+  return text;
 }
 
 async function fetchApplications(auth) {
@@ -476,6 +517,21 @@ function closeDeleteModal() {
   }
 }
 
+function openDeleteSuccessModal() {
+  if (!el.deleteSuccessModal) return;
+  lastFocused = document.activeElement;
+  el.deleteSuccessModal.classList.remove("hidden");
+  if (el.deleteSuccessClose) el.deleteSuccessClose.focus();
+}
+
+function closeDeleteSuccessModal() {
+  if (!el.deleteSuccessModal) return;
+  el.deleteSuccessModal.classList.add("hidden");
+  if (lastFocused && typeof lastFocused.focus === "function") {
+    lastFocused.focus();
+  }
+}
+
 function toggleAccountMenu(forceOpen) {
   if (!el.accountPanel || !el.accountToggle) return;
   const isOpen = !el.accountPanel.classList.contains("hidden");
@@ -549,6 +605,23 @@ function openFeedbackModal() {
   if (el.feedbackTitle) el.feedbackTitle.focus();
 }
 
+function openDescriptionModal(text) {
+  if (!el.descriptionModal || !el.descriptionContent) return;
+  lastFocused = document.activeElement;
+  el.descriptionContent.textContent = text || "";
+  el.descriptionModal.classList.remove("hidden");
+  if (el.descriptionClose) el.descriptionClose.focus();
+}
+
+function closeDescriptionModal() {
+  if (!el.descriptionModal) return;
+  el.descriptionModal.classList.add("hidden");
+  if (el.descriptionContent) el.descriptionContent.textContent = "";
+  if (lastFocused && typeof lastFocused.focus === "function") {
+    lastFocused.focus();
+  }
+}
+
 function closeFeedbackModal() {
   if (!el.feedbackModal) return;
   el.feedbackModal.classList.add("hidden");
@@ -566,8 +639,8 @@ async function submitFeedback() {
     setFeedbackStatus("Please sign in first.", true);
     return;
   }
-  const title = (el.feedbackTitle && el.feedbackTitle.value || "").trim();
-  const message = (el.feedbackMessage && el.feedbackMessage.value || "").trim();
+  const title = sanitizeText(el.feedbackTitle && el.feedbackTitle.value || "", { preserveLineBreaks: false });
+  const message = sanitizeText(el.feedbackMessage && el.feedbackMessage.value || "", { preserveLineBreaks: true });
   if (!title || !message) {
     setFeedbackStatus("Please add a title and details.", true);
     return;
@@ -782,10 +855,14 @@ if (el.deleteConfirm) el.deleteConfirm.addEventListener("click", async () => {
     closeDeleteModal();
     updateUI(null);
     setAuthStatus("Account deleted.");
+    openDeleteSuccessModal();
   } catch (err) {
     setDeleteStatus(err.message || "Delete failed.", true);
   }
 });
+
+if (el.deleteSuccessClose) el.deleteSuccessClose.addEventListener("click", closeDeleteSuccessModal);
+if (el.descriptionClose) el.descriptionClose.addEventListener("click", closeDescriptionModal);
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
@@ -793,6 +870,8 @@ document.addEventListener("keydown", (e) => {
     if (el.feedbackModal && !el.feedbackModal.classList.contains("hidden")) closeFeedbackModal();
     if (el.aboutModal && !el.aboutModal.classList.contains("hidden")) closeAboutModal();
     if (el.deleteModal && !el.deleteModal.classList.contains("hidden")) closeDeleteModal();
+    if (el.deleteSuccessModal && !el.deleteSuccessModal.classList.contains("hidden")) closeDeleteSuccessModal();
+    if (el.descriptionModal && !el.descriptionModal.classList.contains("hidden")) closeDescriptionModal();
   }
 });
 

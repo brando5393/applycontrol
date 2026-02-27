@@ -229,6 +229,21 @@ function normalizeUrl(raw) {
   }
 }
 
+function sanitizeText(value, { preserveLineBreaks = true } = {}) {
+  if (value == null) return "";
+  let text = String(value);
+  text = text.replace(/\u0000/g, "");
+  text = text.replace(/\r\n/g, "\n");
+  text = text.replace(/[ \t]+\n/g, "\n");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  text = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  text = text.trim();
+  if (!preserveLineBreaks) {
+    text = text.replace(/\s+/g, " ");
+  }
+  return text;
+}
+
 function getActiveTab() {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -370,8 +385,8 @@ async function submitFeedback() {
     setFeedbackStatus("Please sign in first.", true);
     return;
   }
-  const title = (el.feedbackTitle && el.feedbackTitle.value || "").trim();
-  const message = (el.feedbackMessage && el.feedbackMessage.value || "").trim();
+  const title = sanitizeText(el.feedbackTitle && el.feedbackTitle.value || "", { preserveLineBreaks: false });
+  const message = sanitizeText(el.feedbackMessage && el.feedbackMessage.value || "", { preserveLineBreaks: true });
   if (!title || !message) {
     setFeedbackStatus("Please add a title and details.", true);
     return;
@@ -477,10 +492,10 @@ el.capture.addEventListener("click", async () => {
     }
     await saveApplication(auth, {
       url: normalizedUrl,
-      title: extracted.title || tab.title || tab.url,
-      company: extracted.company || "",
-      location: extracted.location || "",
-      description: extracted.description || "",
+      title: sanitizeText(extracted.title || tab.title || tab.url, { preserveLineBreaks: false }),
+      company: sanitizeText(extracted.company || "", { preserveLineBreaks: false }),
+      location: sanitizeText(extracted.location || "", { preserveLineBreaks: false }),
+      description: sanitizeText(extracted.description || "", { preserveLineBreaks: true }),
       source: url.hostname
     });
     setStatus("Saved.");

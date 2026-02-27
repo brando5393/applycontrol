@@ -107,6 +107,7 @@
             <div>Captured</div>
             <div>Status</div>
             <div>Link</div>
+            <div>Description</div>
             <div>Delete</div>
           </div>
           <div id="list" class="table-body"></div>
@@ -172,6 +173,26 @@
           <button id="delete-confirm" class="button alert">Delete account</button>
         </div>
         <p id="delete-status" class="status" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <div id="delete-success-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="delete-success-title">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="delete-success-title">Account deleted</h3>
+        <p class="meta">Your account and all associated data have been removed.</p>
+        <div class="row end">
+          <button id="delete-success-close" class="button secondary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="description-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="description-title">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="description-title">Job Description</h3>
+        <div id="description-content" class="description-content"></div>
+        <div class="row end">
+          <button id="description-close" class="button secondary">Close</button>
+        </div>
       </div>
     </div>
 
