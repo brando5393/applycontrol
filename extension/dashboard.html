@@ -8,14 +8,24 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/foundation-sites@6.7.5/dist/css/foundation.min.css"
     />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0,0"
+    />
     <link rel="stylesheet" href="dashboard.css" />
   </head>
   <body>
     <header class="top">
-      <h1>ApplyControl</h1>
+      <div class="brand">
+        <h1>ApplyControl</h1>
+        <p class="tagline">Apply Control to your job search process.</p>
+      </div>
       <div class="right">
         <span id="user-label"></span>
-        <button id="sign-out" class="button secondary hidden">Sign out</button>
+        <button id="sign-out" class="button secondary hidden">
+          <span class="material-symbols-outlined icon">logout</span>
+          Sign out
+        </button>
       </div>
     </header>
 
@@ -37,8 +47,14 @@
           </label>
         </div>
         <div class="row">
-          <button id="sign-in" class="button">Sign in</button>
-          <button id="sign-up" class="button secondary">Sign up</button>
+          <button id="sign-in" class="button">
+            <span class="material-symbols-outlined icon">login</span>
+            Sign in
+          </button>
+          <button id="sign-up" class="button secondary">
+            <span class="material-symbols-outlined icon">person_add</span>
+            Sign up
+          </button>
         </div>
         <p id="auth-status" class="status"></p>
       </section>
@@ -56,8 +72,14 @@
         <div class="row space">
           <p class="meta" id="sync-status"></p>
           <div class="row">
-            <button id="refresh" class="button secondary">Refresh</button>
-            <button id="clear-all" class="button alert">Clear all</button>
+            <button id="refresh" class="button secondary">
+              <span class="material-symbols-outlined icon">refresh</span>
+              Refresh
+            </button>
+            <button id="clear-all" class="button alert">
+              <span class="material-symbols-outlined icon">delete_forever</span>
+              Clear all
+            </button>
           </div>
         </div>
         <div class="filter-row" id="status-filters"></div>
@@ -68,6 +90,7 @@
             <div>Captured</div>
             <div>Status</div>
             <div>Link</div>
+            <div>Delete</div>
           </div>
           <div id="list" class="table-body"></div>
         </div>
@@ -79,8 +102,14 @@
         <h3>Delete all applications?</h3>
         <p class="meta">This cannot be undone.</p>
         <div class="row end">
-          <button id="modal-cancel" class="button secondary">Cancel</button>
-          <button id="modal-confirm" class="button alert">Delete all</button>
+          <button id="modal-cancel" class="button secondary">
+            <span class="material-symbols-outlined icon">close</span>
+            Cancel
+          </button>
+          <button id="modal-confirm" class="button alert">
+            <span class="material-symbols-outlined icon">delete</span>
+            Delete all
+          </button>
         </div>
       </div>
     </div>

@@ -263,6 +263,16 @@ function renderList() {
       <div>
         <a href="${app.url}" target="_blank" rel="noreferrer">Open</a>
       </div>
+      <div>
+        <button
+          class="button alert tiny"
+          data-delete-id="${app.id}"
+          title="Delete item. This action cannot be undone."
+        >
+          <span class="material-symbols-outlined icon">delete</span>
+          Delete
+        </button>
+      </div>
     `;
     const select = row.querySelector("select");
     select.value = app.status || "applied";
@@ -271,6 +281,19 @@ function renderList() {
     });
     el.list.appendChild(row);
   }
+
+  const deleteButtons = el.list.querySelectorAll("[data-delete-id]");
+  deleteButtons.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-delete-id");
+      if (!id) return;
+      try {
+        await deleteOneApplication(id);
+      } catch (err) {
+        if (el.syncStatus) el.syncStatus.textContent = `Delete error: ${err.message}`;
+      }
+    });
+  });
 }
 
 async function fetchApplications(auth) {
@@ -342,6 +365,25 @@ async function updateStatus(docId, status) {
       }
     })
   });
+}
+
+async function deleteOneApplication(docId) {
+  const auth = await getValidAuth().catch(() => null);
+  if (!auth) return;
+  const deleteUrl = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents/applications/${docId}`;
+  const res = await fetch(deleteUrl, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${auth.idToken}`
+    }
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Delete failed.");
+  }
+  cachedApps = cachedApps.filter((app) => app.id !== docId);
+  renderList();
+  if (el.syncStatus) el.syncStatus.textContent = "Application deleted.";
 }
 
 el.search.addEventListener("input", renderList);

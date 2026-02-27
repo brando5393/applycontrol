@@ -18,6 +18,18 @@ h1 {
   font-size: 18px;
 }
 
+.popup-header {
+  background: linear-gradient(135deg, #314CB6 0%, #3F5AD6 50%, #4D69F0 100%);
+  color: #E9E6FF;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.popup-header .subtitle {
+  color: #E9E6FF;
+}
+
 .subtitle {
   margin: 4px 0 12px;
   color: #666;
@@ -41,6 +53,14 @@ input {
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 13px;
+}
+
+.icon {
+  font-family: "Material Symbols Outlined";
+  font-size: 16px;
+  line-height: 1;
+  vertical-align: middle;
+  margin-right: 6px;
 }
 
 .row {
@@ -83,5 +103,28 @@ input {
 footer {
   margin-top: 10px;
   font-size: 11px;
+  color: #666;
+}
+
+.help {
+  margin-top: 8px;
+}
+
+.help-panel {
+  margin-top: 6px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #333;
+}
+
+.help-panel ol {
+  margin: 6px 0 8px 16px;
+}
+
+.help-panel .meta {
+  margin: 0;
   color: #666;
 }

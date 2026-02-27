@@ -11,6 +11,9 @@ const el = {
   signOut: document.getElementById("sign-out"),
   openDashboard: document.getElementById("open-dashboard"),
   capture: document.getElementById("capture"),
+  helpToggle: document.getElementById("help-toggle"),
+  helpPanel: document.getElementById("help-panel"),
+  version: document.getElementById("version"),
   status: document.getElementById("status"),
   userLabel: document.getElementById("user-label")
 };
@@ -250,6 +253,9 @@ async function init() {
   el.rememberMe.checked = await loadRemember();
   const auth = await getValidAuth().catch(() => null);
   updateUI(auth);
+  if (el.version && chrome.runtime && chrome.runtime.getManifest) {
+    el.version.textContent = chrome.runtime.getManifest().version || "n/a";
+  }
   const tab = await getActiveTab();
   if (tab && tab.id) {
     const ok = await isJobPage(tab.id);
@@ -322,6 +328,12 @@ el.openDashboard.addEventListener("click", () => {
     chrome.tabs.create({ url: chrome.runtime.getURL("dashboard.html") });
   }
 });
+
+if (el.helpToggle && el.helpPanel) {
+  el.helpToggle.addEventListener("click", () => {
+    el.helpPanel.classList.toggle("hidden");
+  });
+}
 
 el.capture.addEventListener("click", async () => {
   setStatus("");

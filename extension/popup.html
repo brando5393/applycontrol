@@ -7,13 +7,17 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/foundation-sites@6.7.5/dist/css/foundation.min.css"
     />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0,0"
+    />
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main class="callout">
-      <header>
+      <header class="popup-header">
         <h1>ApplyControl</h1>
-        <p class="subtitle">One-click job capture</p>
+        <p class="subtitle">Apply Control to your job search process.</p>
       </header>
 
       <section id="auth-section">
@@ -32,8 +36,14 @@
           </label>
         </div>
         <div class="row">
-          <button id="sign-in" class="button">Sign in</button>
-          <button id="sign-up" class="button secondary">Sign up</button>
+          <button id="sign-in" class="button">
+            <span class="material-symbols-outlined icon">login</span>
+            Sign in
+          </button>
+          <button id="sign-up" class="button secondary">
+            <span class="material-symbols-outlined icon">person_add</span>
+            Sign up
+          </button>
         </div>
       </section>
 
@@ -41,21 +51,42 @@
         <div id="verify-section" class="notice hidden">
           <p>Please verify your email to use ApplyControl.</p>
           <button id="resend-verify" class="button secondary">
+            <span class="material-symbols-outlined icon">mark_email_read</span>
             Resend verification email
           </button>
         </div>
         <div class="row">
-          <button id="capture" class="button">Save application</button>
+          <button id="capture" class="button">
+            <span class="material-symbols-outlined icon">bookmark_add</span>
+            Save application
+          </button>
           <button id="open-dashboard" class="button secondary hidden">
+            <span class="material-symbols-outlined icon">dashboard</span>
             Dashboard
           </button>
-          <button id="sign-out" class="button secondary">Sign out</button>
+          <button id="sign-out" class="button secondary">
+            <span class="material-symbols-outlined icon">logout</span>
+            Sign out
+          </button>
         </div>
         <p class="status" id="status"></p>
       </section>
 
       <footer>
         <span id="user-label"></span>
+        <div class="help">
+          <button id="help-toggle" class="button tiny secondary">Help</button>
+          <div id="help-panel" class="help-panel hidden">
+            <p><strong>How to use</strong></p>
+            <ol>
+              <li>Open a job posting page.</li>
+              <li>Click the ApplyControl icon.</li>
+              <li>Press “Save application”.</li>
+              <li>Open Dashboard to view and track status.</li>
+            </ol>
+            <p class="meta">Version: <span id="version"></span></p>
+          </div>
+        </div>
       </footer>
     </main>
 
