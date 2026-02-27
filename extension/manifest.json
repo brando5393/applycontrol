@@ -7,7 +7,8 @@
   "host_permissions": [
     "https://identitytoolkit.googleapis.com/*",
     "https://securetoken.googleapis.com/*",
-    "https://firestore.googleapis.com/*"
+    "https://firestore.googleapis.com/*",
+    "https://us-central1-applycontrol.cloudfunctions.net/*"
   ],
   "action": {
     "default_title": "Save Application",

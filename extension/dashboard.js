@@ -18,9 +18,16 @@ const el = {
   syncStatus: document.getElementById("sync-status"),
   refresh: document.getElementById("refresh"),
   clearAll: document.getElementById("clear-all"),
+  feedbackToggle: document.getElementById("feedback-toggle"),
   modal: document.getElementById("modal"),
   modalCancel: document.getElementById("modal-cancel"),
-  modalConfirm: document.getElementById("modal-confirm")
+  modalConfirm: document.getElementById("modal-confirm"),
+  feedbackModal: document.getElementById("feedback-modal"),
+  feedbackTitle: document.getElementById("feedback-title-input"),
+  feedbackMessage: document.getElementById("feedback-message-input"),
+  feedbackCancel: document.getElementById("feedback-cancel"),
+  feedbackSubmit: document.getElementById("feedback-submit"),
+  feedbackStatus: document.getElementById("feedback-status")
 };
 
 const STORAGE_KEY = "applycontrol_auth";
@@ -38,10 +45,17 @@ let cachedApps = [];
 let activeStatus = "all";
 let pollTimer = null;
 let isFetching = false;
+let lastFocused = null;
 
 function setAuthStatus(message, isError = false) {
   el.authStatus.textContent = message || "";
   el.authStatus.style.color = isError ? "#b00020" : "#2b7a2b";
+}
+
+function setFeedbackStatus(message, isError = false) {
+  if (!el.feedbackStatus) return;
+  el.feedbackStatus.textContent = message || "";
+  el.feedbackStatus.style.color = isError ? "#b00020" : "#2b7a2b";
 }
 
 function requireConfig() {
@@ -393,11 +407,81 @@ el.refresh.addEventListener("click", async () => {
 });
 
 function openModal() {
-  if (el.modal) el.modal.classList.remove("hidden");
+  if (el.modal) {
+    lastFocused = document.activeElement;
+    el.modal.classList.remove("hidden");
+    if (el.modalConfirm) el.modalConfirm.focus();
+  }
 }
 
 function closeModal() {
   if (el.modal) el.modal.classList.add("hidden");
+  if (lastFocused && typeof lastFocused.focus === "function") {
+    lastFocused.focus();
+  }
+}
+
+function openFeedbackModal() {
+  if (!el.feedbackModal) return;
+  lastFocused = document.activeElement;
+  el.feedbackModal.classList.remove("hidden");
+  if (el.feedbackTitle) el.feedbackTitle.focus();
+}
+
+function closeFeedbackModal() {
+  if (!el.feedbackModal) return;
+  el.feedbackModal.classList.add("hidden");
+  if (el.feedbackTitle) el.feedbackTitle.value = "";
+  if (el.feedbackMessage) el.feedbackMessage.value = "";
+  setFeedbackStatus("");
+  if (lastFocused && typeof lastFocused.focus === "function") {
+    lastFocused.focus();
+  }
+}
+
+async function submitFeedback() {
+  if (!config.feedbackFunctionUrl) {
+    setFeedbackStatus("Feedback is not configured.", true);
+    return;
+  }
+  const auth = await getValidAuth().catch(() => null);
+  if (!auth) {
+    setFeedbackStatus("Please sign in first.", true);
+    return;
+  }
+  const title = (el.feedbackTitle && el.feedbackTitle.value || "").trim();
+  const message = (el.feedbackMessage && el.feedbackMessage.value || "").trim();
+  if (!title || !message) {
+    setFeedbackStatus("Please add a title and details.", true);
+    return;
+  }
+  setFeedbackStatus("Sending...");
+  const version = chrome.runtime && chrome.runtime.getManifest
+    ? chrome.runtime.getManifest().version
+    : "n/a";
+  const res = await fetch(config.feedbackFunctionUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${auth.idToken}`
+    },
+    body: JSON.stringify({
+      title,
+      message,
+      version,
+      pageUrl: location.href,
+      userAgent: navigator.userAgent
+    })
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    setFeedbackStatus(text || "Feedback failed.", true);
+    return;
+  }
+  setFeedbackStatus("Thanks! Feedback sent.");
+  setTimeout(() => {
+    closeFeedbackModal();
+  }, 1200);
 }
 
 async function clearAllApplications() {
@@ -518,6 +602,17 @@ if (el.modalConfirm) {
     }
   });
 }
+
+if (el.feedbackToggle) el.feedbackToggle.addEventListener("click", openFeedbackModal);
+if (el.feedbackCancel) el.feedbackCancel.addEventListener("click", closeFeedbackModal);
+if (el.feedbackSubmit) el.feedbackSubmit.addEventListener("click", submitFeedback);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (el.modal && !el.modal.classList.contains("hidden")) closeModal();
+    if (el.feedbackModal && !el.feedbackModal.classList.contains("hidden")) closeFeedbackModal();
+  }
+});
 
 async function init() {
   if (!requireConfig()) return;

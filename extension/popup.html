@@ -23,11 +23,11 @@
       <section id="auth-section">
         <div class="field">
           <label for="email">Email</label>
-          <input id="email" type="email" placeholder="you@email.com" />
+          <input id="email" type="email" placeholder="you@email.com" autocomplete="email" />
         </div>
         <div class="field">
           <label for="password">Password</label>
-          <input id="password" type="password" placeholder="********" />
+          <input id="password" type="password" placeholder="********" autocomplete="current-password" />
         </div>
         <div class="row">
           <label class="checkbox">
@@ -69,14 +69,15 @@
             Sign out
           </button>
         </div>
-        <p class="status" id="status"></p>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
       </section>
 
       <footer>
         <span id="user-label"></span>
         <div class="help">
-          <button id="help-toggle" class="button tiny secondary">Help</button>
-          <div id="help-panel" class="help-panel hidden">
+          <button id="help-toggle" class="button tiny secondary" aria-expanded="false" aria-controls="help-panel">Help</button>
+          <button id="feedback-toggle" class="button tiny">Feedback</button>
+          <div id="help-panel" class="help-panel hidden" role="region" aria-label="Help and version">
             <p><strong>How to use</strong></p>
             <ol>
               <li>Open a job posting page.</li>
@@ -89,6 +90,22 @@
         </div>
       </footer>
     </main>
+
+    <div id="feedback-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="feedback-title" aria-describedby="feedback-desc">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="feedback-title">Send Feedback</h3>
+        <p id="feedback-desc" class="meta">Share a bug or idea. This creates a ticket for the dev team.</p>
+        <label for="feedback-title-input">Title</label>
+        <input id="feedback-title-input" type="text" placeholder="Short summary" />
+        <label for="feedback-message-input">Details</label>
+        <textarea id="feedback-message-input" rows="4" placeholder="What happened or what should we improve?"></textarea>
+        <div class="row end">
+          <button id="feedback-cancel" class="button secondary">Cancel</button>
+          <button id="feedback-submit" class="button">Submit</button>
+        </div>
+        <p id="feedback-status" class="status" role="status" aria-live="polite"></p>
+      </div>
+    </div>
 
     <script src="config.js"></script>
     <script src="popup.js"></script>

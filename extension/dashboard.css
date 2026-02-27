@@ -68,6 +68,23 @@ input {
   font-size: 13px;
 }
 
+textarea {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 100%;
+}
+
+.button:focus-visible,
+input:focus-visible,
+a:focus-visible,
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid #314CB6;
+  outline-offset: 2px;
+}
+
 .icon {
   font-family: "Material Symbols Outlined";
   font-size: 16px;

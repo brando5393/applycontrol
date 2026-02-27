@@ -2,5 +2,6 @@
 // Firebase Web API Key is required for Identity Toolkit REST API.
 window.APPLYCONTROL_CONFIG = {
   firebaseApiKey: "YOUR_FIREBASE_WEB_API_KEY",
-  firebaseProjectId: "YOUR_FIREBASE_PROJECT_ID"
+  firebaseProjectId: "YOUR_FIREBASE_PROJECT_ID",
+  feedbackFunctionUrl: "https://us-central1-YOUR_FIREBASE_PROJECT_ID.cloudfunctions.net/createFeedbackIssue"
 };

@@ -34,6 +34,32 @@ Copy and fill in config files:
 - `extension/config.js` from `extension/config.example.js`
 - `dashboard/config.js` from `dashboard/config.example.js`
 
+## Feedback Issues (Firebase Functions)
+This uses a Firebase HTTPS Cloud Function that creates GitHub issues on your behalf.
+
+### Prereqs
+- Firebase CLI (`npm i -g firebase-tools`)
+- Logged in: `firebase login`
+
+### Setup
+1. Install function deps:
+```
+cd functions
+npm install
+```
+
+2. Set the GitHub token (needs `repo` scope):
+```
+firebase functions:secrets:set GITHUB_TOKEN
+```
+
+3. Deploy functions:
+```
+firebase deploy --only functions
+```
+
+4. Ensure `feedbackFunctionUrl` is set in `extension/config.js`.
+
 ### Quick Setup Scripts
 Generate local config files from templates:
 

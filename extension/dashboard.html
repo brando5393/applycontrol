@@ -34,11 +34,11 @@
         <h2>Sign in</h2>
         <div class="field">
           <label for="email">Email</label>
-          <input id="email" type="email" placeholder="you@email.com" />
+          <input id="email" type="email" placeholder="you@email.com" autocomplete="email" />
         </div>
         <div class="field">
           <label for="password">Password</label>
-          <input id="password" type="password" placeholder="********" />
+          <input id="password" type="password" placeholder="********" autocomplete="current-password" />
         </div>
         <div class="row">
           <label class="checkbox">
@@ -56,7 +56,7 @@
             Sign up
           </button>
         </div>
-        <p id="auth-status" class="status"></p>
+        <p id="auth-status" class="status" role="status" aria-live="polite"></p>
       </section>
 
       <section id="app-section" class="callout hidden">
@@ -70,11 +70,15 @@
           </div>
         </div>
         <div class="row space">
-          <p class="meta" id="sync-status"></p>
+          <p class="meta" id="sync-status" role="status" aria-live="polite"></p>
           <div class="row">
             <button id="refresh" class="button secondary">
               <span class="material-symbols-outlined icon">refresh</span>
               Refresh
+            </button>
+            <button id="feedback-toggle" class="button secondary">
+              <span class="material-symbols-outlined icon">feedback</span>
+              Feedback
             </button>
             <button id="clear-all" class="button alert">
               <span class="material-symbols-outlined icon">delete_forever</span>
@@ -97,10 +101,10 @@
       </section>
     </main>
 
-    <div id="modal" class="modal hidden">
-      <div class="modal-card">
-        <h3>Delete all applications?</h3>
-        <p class="meta">This cannot be undone.</p>
+    <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-desc">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="modal-title">Delete all applications?</h3>
+        <p class="meta" id="modal-desc">This cannot be undone.</p>
         <div class="row end">
           <button id="modal-cancel" class="button secondary">
             <span class="material-symbols-outlined icon">close</span>
@@ -111,6 +115,22 @@
             Delete all
           </button>
         </div>
+      </div>
+    </div>
+
+    <div id="feedback-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="feedback-title" aria-describedby="feedback-desc">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="feedback-title">Send Feedback</h3>
+        <p id="feedback-desc" class="meta">Share a bug or idea. This creates a ticket for the dev team.</p>
+        <label for="feedback-title-input">Title</label>
+        <input id="feedback-title-input" type="text" placeholder="Short summary" />
+        <label for="feedback-message-input">Details</label>
+        <textarea id="feedback-message-input" rows="5" placeholder="What happened or what should we improve?"></textarea>
+        <div class="row end">
+          <button id="feedback-cancel" class="button secondary">Cancel</button>
+          <button id="feedback-submit" class="button">Submit</button>
+        </div>
+        <p id="feedback-status" class="status" role="status" aria-live="polite"></p>
       </div>
     </div>
 

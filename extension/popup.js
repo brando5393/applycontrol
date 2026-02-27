@@ -14,6 +14,13 @@ const el = {
   helpToggle: document.getElementById("help-toggle"),
   helpPanel: document.getElementById("help-panel"),
   version: document.getElementById("version"),
+  feedbackToggle: document.getElementById("feedback-toggle"),
+  feedbackModal: document.getElementById("feedback-modal"),
+  feedbackTitle: document.getElementById("feedback-title-input"),
+  feedbackMessage: document.getElementById("feedback-message-input"),
+  feedbackCancel: document.getElementById("feedback-cancel"),
+  feedbackSubmit: document.getElementById("feedback-submit"),
+  feedbackStatus: document.getElementById("feedback-status"),
   status: document.getElementById("status"),
   userLabel: document.getElementById("user-label")
 };
@@ -24,6 +31,12 @@ const REMEMBER_KEY = "applycontrol_remember";
 function setStatus(message, isError = false) {
   el.status.textContent = message || "";
   el.status.style.color = isError ? "#b00020" : "#2b7a2b";
+}
+
+function setFeedbackStatus(message, isError = false) {
+  if (!el.feedbackStatus) return;
+  el.feedbackStatus.textContent = message || "";
+  el.feedbackStatus.style.color = isError ? "#b00020" : "#2b7a2b";
 }
 
 function requireConfig() {
@@ -332,8 +345,79 @@ el.openDashboard.addEventListener("click", () => {
 if (el.helpToggle && el.helpPanel) {
   el.helpToggle.addEventListener("click", () => {
     el.helpPanel.classList.toggle("hidden");
+    const expanded = !el.helpPanel.classList.contains("hidden");
+    el.helpToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
   });
 }
+
+function openFeedbackModal() {
+  if (!el.feedbackModal) return;
+  el.feedbackModal.classList.remove("hidden");
+  if (el.feedbackTitle) el.feedbackTitle.focus();
+}
+
+function closeFeedbackModal() {
+  if (!el.feedbackModal) return;
+  el.feedbackModal.classList.add("hidden");
+  if (el.feedbackTitle) el.feedbackTitle.value = "";
+  if (el.feedbackMessage) el.feedbackMessage.value = "";
+  setFeedbackStatus("");
+}
+
+async function submitFeedback() {
+  if (!config.feedbackFunctionUrl) {
+    setFeedbackStatus("Feedback is not configured.", true);
+    return;
+  }
+  const auth = await getValidAuth().catch(() => null);
+  if (!auth) {
+    setFeedbackStatus("Please sign in first.", true);
+    return;
+  }
+  const title = (el.feedbackTitle && el.feedbackTitle.value || "").trim();
+  const message = (el.feedbackMessage && el.feedbackMessage.value || "").trim();
+  if (!title || !message) {
+    setFeedbackStatus("Please add a title and details.", true);
+    return;
+  }
+  setFeedbackStatus("Sending...");
+  const version = chrome.runtime && chrome.runtime.getManifest
+    ? chrome.runtime.getManifest().version
+    : "n/a";
+  const res = await fetch(config.feedbackFunctionUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${auth.idToken}`
+    },
+    body: JSON.stringify({
+      title,
+      message,
+      version,
+      pageUrl: "",
+      userAgent: navigator.userAgent
+    })
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    setFeedbackStatus(text || "Feedback failed.", true);
+    return;
+  }
+  setFeedbackStatus("Thanks! Feedback sent.");
+  setTimeout(() => {
+    closeFeedbackModal();
+  }, 1200);
+}
+
+if (el.feedbackToggle) el.feedbackToggle.addEventListener("click", openFeedbackModal);
+if (el.feedbackCancel) el.feedbackCancel.addEventListener("click", closeFeedbackModal);
+if (el.feedbackSubmit) el.feedbackSubmit.addEventListener("click", submitFeedback);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && el.feedbackModal && !el.feedbackModal.classList.contains("hidden")) {
+    closeFeedbackModal();
+  }
+});
 
 el.capture.addEventListener("click", async () => {
   setStatus("");
