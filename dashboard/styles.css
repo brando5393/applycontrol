@@ -1,0 +1,204 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f3f3f3;
+  color: #111;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #111;
+  color: #fff;
+}
+
+.top h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.container {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 0 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #e6e6e6;
+}
+
+h2 {
+  margin: 0 0 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+label {
+  font-size: 12px;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+input {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.row.space {
+  justify-content: space-between;
+}
+
+button {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+button.ghost {
+  background: #fff;
+  color: #111;
+}
+
+.status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #2b7a2b;
+}
+
+.hidden {
+  display: none;
+}
+
+.list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+select {
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.meta {
+  font-size: 12px;
+  color: #666;
+}
+
+.filters input {
+  min-width: 220px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 12px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.pill.active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+.table {
+  display: grid;
+  gap: 8px;
+}
+
+.table-head {
+  display: grid;
+  grid-template-columns: 2.5fr 1.2fr 1.2fr 1fr 0.6fr;
+  gap: 10px;
+  font-size: 12px;
+  color: #666;
+  padding: 6px 4px;
+  border-bottom: 1px solid #eee;
+}
+
+.table-body {
+  display: grid;
+  gap: 8px;
+}
+
+.row-item {
+  display: grid;
+  grid-template-columns: 2.5fr 1.2fr 1.2fr 1fr 0.6fr;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.role {
+  display: grid;
+  gap: 4px;
+}
+
+.role-title {
+  font-weight: 600;
+}
+
+.badge {
+  font-size: 11px;
+  color: #333;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  width: fit-content;
+}
+
+@media (max-width: 720px) {
+  .table-head {
+    display: none;
+  }
+  .row-item {
+    grid-template-columns: 1fr;
+  }
+}

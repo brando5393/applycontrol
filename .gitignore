@@ -1,0 +1,10 @@
+# Local config with API keys
+extension/config.js
+dashboard/config.js
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

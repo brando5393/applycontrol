@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ApplyControl</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header>
+        <h1>ApplyControl</h1>
+        <p class="subtitle">One-click job capture</p>
+      </header>
+
+      <section id="auth-section">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="you@email.com" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="••••••••" />
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input id="remember-me" type="checkbox" checked />
+            <span>Remember me</span>
+          </label>
+        </div>
+        <div class="row">
+          <button id="sign-in">Sign in</button>
+          <button id="sign-up" class="ghost">Sign up</button>
+        </div>
+        <div class="row">
+          <button id="google-sign-in" class="google">Sign in with Google</button>
+        </div>
+      </section>
+
+      <section id="app-section" class="hidden">
+        <div class="row">
+          <button id="capture">Save application</button>
+          <button id="open-dashboard" class="ghost">Dashboard</button>
+          <button id="sign-out" class="ghost">Sign out</button>
+        </div>
+        <p class="status" id="status"></p>
+      </section>
+
+      <footer>
+        <span id="user-label"></span>
+      </footer>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

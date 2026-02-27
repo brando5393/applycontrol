@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ApplyControl Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>ApplyControl</h1>
+      <div class="right">
+        <span id="user-label"></span>
+        <button id="sign-out" class="ghost hidden">Sign out</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <section id="auth-section" class="card">
+        <h2>Sign in</h2>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="you@email.com" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="••••••••" />
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input id="remember-me" type="checkbox" checked />
+            <span>Remember me</span>
+          </label>
+        </div>
+        <div class="row">
+          <button id="sign-in">Sign in</button>
+          <button id="sign-up" class="ghost">Sign up</button>
+        </div>
+        <div class="row">
+          <button id="google-sign-in" class="google">Sign in with Google</button>
+        </div>
+        <p id="auth-status" class="status"></p>
+      </section>
+
+      <section id="app-section" class="card hidden">
+        <div class="row space">
+          <div>
+            <h2>Applications</h2>
+            <p class="meta" id="count"></p>
+          </div>
+          <div class="filters">
+            <input id="search" placeholder="Search title or company" />
+          </div>
+        </div>
+        <div class="filter-row" id="status-filters"></div>
+        <div class="table">
+          <div class="table-head">
+            <div>Role</div>
+            <div>Source</div>
+            <div>Captured</div>
+            <div>Status</div>
+            <div>Link</div>
+          </div>
+          <div id="list" class="table-body"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="dashboard.js"></script>
+  </body>
+</html>
