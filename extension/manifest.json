@@ -3,7 +3,7 @@
   "name": "ApplyControl",
   "version": "0.1.0",
   "description": "One-click job application capture.",
-  "permissions": ["activeTab", "storage", "scripting", "identity"],
+  "permissions": ["activeTab", "storage", "scripting"],
   "host_permissions": [
     "https://identitytoolkit.googleapis.com/*",
     "https://securetoken.googleapis.com/*",
@@ -12,6 +12,9 @@
   "action": {
     "default_title": "Save Application",
     "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com"
   },
   "options_ui": {
     "page": "dashboard.html",

@@ -8,14 +8,19 @@ const el = {
   rememberMe: document.getElementById("remember-me"),
   signIn: document.getElementById("sign-in"),
   signUp: document.getElementById("sign-up"),
-  googleSignIn: document.getElementById("google-sign-in"),
   signOut: document.getElementById("sign-out"),
   authStatus: document.getElementById("auth-status"),
   list: document.getElementById("list"),
   search: document.getElementById("search"),
   userLabel: document.getElementById("user-label"),
   count: document.getElementById("count"),
-  statusFilters: document.getElementById("status-filters")
+  statusFilters: document.getElementById("status-filters"),
+  syncStatus: document.getElementById("sync-status"),
+  refresh: document.getElementById("refresh"),
+  clearAll: document.getElementById("clear-all"),
+  modal: document.getElementById("modal"),
+  modalCancel: document.getElementById("modal-cancel"),
+  modalConfirm: document.getElementById("modal-confirm")
 };
 
 const STORAGE_KEY = "applycontrol_auth";
@@ -47,25 +52,8 @@ function requireConfig() {
   return true;
 }
 
-function storageArea(name) {
-  return chrome.storage && chrome.storage[name] ? chrome.storage[name] : null;
-}
-
 function loadAuth() {
   return new Promise((resolve) => {
-    const session = storageArea("session");
-    if (session) {
-      session.get([STORAGE_KEY], (result) => {
-        if (result && result[STORAGE_KEY]) {
-          resolve(result[STORAGE_KEY]);
-        } else {
-          chrome.storage.local.get([STORAGE_KEY], (localResult) => {
-            resolve(localResult[STORAGE_KEY] || null);
-          });
-        }
-      });
-      return;
-    }
     chrome.storage.local.get([STORAGE_KEY], (result) => {
       resolve(result[STORAGE_KEY] || null);
     });
@@ -74,34 +62,15 @@ function loadAuth() {
 
 function saveAuth(data, remember) {
   return new Promise((resolve) => {
-    const session = storageArea("session");
     chrome.storage.local.set({ [REMEMBER_KEY]: remember }, () => {
-      if (remember) {
-        chrome.storage.local.set({ [STORAGE_KEY]: data }, () => {
-          if (session) session.remove([STORAGE_KEY], resolve);
-          else resolve();
-        });
-        return;
-      }
-      chrome.storage.local.remove([STORAGE_KEY], () => {
-        if (session) {
-          session.set({ [STORAGE_KEY]: data }, resolve);
-        } else {
-          chrome.storage.local.set({ [STORAGE_KEY]: data }, resolve);
-        }
-      });
+      chrome.storage.local.set({ [STORAGE_KEY]: { ...data, sessionOnly: !remember } }, resolve);
     });
   });
 }
 
 function clearAuth() {
   return new Promise((resolve) => {
-    const session = storageArea("session");
-    const done = () => {
-      chrome.storage.local.remove([STORAGE_KEY, REMEMBER_KEY], resolve);
-    };
-    if (session) session.remove([STORAGE_KEY], done);
-    else done();
+    chrome.storage.local.remove([STORAGE_KEY, REMEMBER_KEY], resolve);
   });
 }
 
@@ -126,8 +95,14 @@ async function signUp(email, password) {
       body: JSON.stringify({ email, password, returnSecureToken: true })
     }
   );
-  if (!res.ok) throw new Error("Sign up failed.");
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data && data.error && data.error.message
+      ? data.error.message
+      : "Sign up failed.";
+    throw new Error(msg);
+  }
+  return data;
 }
 
 async function signIn(email, password) {
@@ -139,8 +114,14 @@ async function signIn(email, password) {
       body: JSON.stringify({ email, password, returnSecureToken: true })
     }
   );
-  if (!res.ok) throw new Error("Sign in failed.");
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data && data.error && data.error.message
+      ? data.error.message
+      : "Sign in failed.";
+    throw new Error(msg);
+  }
+  return data;
 }
 
 async function refreshToken(refreshTokenValue) {
@@ -154,82 +135,14 @@ async function refreshToken(refreshTokenValue) {
       )}`
     }
   );
-  if (!res.ok) throw new Error("Token refresh failed.");
-  return res.json();
-}
-
-async function signInWithIdp(accessToken, requestUri) {
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${config.firebaseApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        postBody: `access_token=${encodeURIComponent(
-          accessToken
-        )}&providerId=google.com`,
-        requestUri,
-        returnIdpCredential: true,
-        returnSecureToken: true
-      })
-    }
-  );
-  if (!res.ok) throw new Error("Google sign-in failed.");
-  return res.json();
-}
-
-function parseFragmentParams(fragment) {
-  const params = new URLSearchParams(fragment.replace(/^#/, ""));
-  const out = {};
-  for (const [key, value] of params.entries()) out[key] = value;
-  return out;
-}
-
-async function googleAuthFlow() {
-  if (!config.googleClientId || config.googleClientId.startsWith("YOUR_")) {
-    throw new Error("Missing Google OAuth client ID.");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data && data.error && data.error.message
+      ? data.error.message
+      : "Token refresh failed.";
+    throw new Error(msg);
   }
-  if (!chrome.identity || !chrome.identity.launchWebAuthFlow) {
-    throw new Error("Google sign-in not supported in this browser.");
-  }
-  const redirectUri = chrome.identity.getRedirectURL("oauth2");
-  const authUrl =
-    "https://accounts.google.com/o/oauth2/v2/auth" +
-    `?client_id=${encodeURIComponent(config.googleClientId)}` +
-    `&response_type=token` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&scope=${encodeURIComponent("openid email profile")}` +
-    `&prompt=select_account`;
-
-  const redirectUrl = await new Promise((resolve, reject) => {
-    chrome.identity.launchWebAuthFlow(
-      { url: authUrl, interactive: true },
-      (resultUrl) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        if (!resultUrl) {
-          reject(new Error("No redirect URL."));
-          return;
-        }
-        resolve(resultUrl);
-      }
-    );
-  });
-
-  const fragment = redirectUrl.split("#")[1] || "";
-  const params = parseFragmentParams(fragment);
-  if (!params.access_token) throw new Error("Missing access token.");
-  const data = await signInWithIdp(params.access_token, redirectUri);
-  const expiresAt = Date.now() + Number(data.expiresIn) * 1000;
-  return {
-    email: data.email,
-    localId: data.localId,
-    idToken: data.idToken,
-    refreshToken: data.refreshToken,
-    expiresAt
-  };
+  return data;
 }
 
 async function getValidAuth() {
@@ -237,17 +150,22 @@ async function getValidAuth() {
   if (!auth) return null;
   const now = Date.now();
   if (auth.expiresAt && auth.expiresAt - now > 60 * 1000) return auth;
-  const refreshed = await refreshToken(auth.refreshToken);
-  const expiresAt = Date.now() + Number(refreshed.expires_in) * 1000;
-  const updated = {
-    ...auth,
-    idToken: refreshed.id_token,
-    refreshToken: refreshed.refresh_token,
-    expiresAt
-  };
-  const remember = await loadRemember();
-  await saveAuth(updated, remember);
-  return updated;
+  try {
+    const refreshed = await refreshToken(auth.refreshToken);
+    const expiresAt = Date.now() + Number(refreshed.expires_in) * 1000;
+    const updated = {
+      ...auth,
+      idToken: refreshed.id_token,
+      refreshToken: refreshed.refresh_token,
+      expiresAt,
+      stale: false
+    };
+    const remember = await loadRemember();
+    await saveAuth(updated, remember);
+    return updated;
+  } catch {
+    return { ...auth, stale: true };
+  }
 }
 
 function updateUI(auth) {
@@ -256,6 +174,10 @@ function updateUI(auth) {
   el.appSection.classList.toggle("hidden", !signedIn);
   el.signOut.classList.toggle("hidden", !signedIn);
   el.userLabel.textContent = signedIn ? auth.email : "";
+  if (auth && auth.stale && el.syncStatus) {
+    el.syncStatus.textContent = "Session expired. Please sign in again.";
+  }
+  if (!signedIn) closeModal();
 }
 
 function renderStatusFilters() {
@@ -353,36 +275,54 @@ function renderList() {
 
 async function fetchApplications(auth) {
   if (isFetching) return;
+  if (auth && auth.stale) {
+    if (el.syncStatus) el.syncStatus.textContent = "Session expired. Please sign in again.";
+    return;
+  }
   isFetching = true;
+  if (el.syncStatus) el.syncStatus.textContent = "Syncing...";
   const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents:runQuery`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${auth.idToken}`
-    },
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId: "applications" }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: "user_id" },
-            op: "EQUAL",
-            value: { stringValue: auth.localId }
-          }
-        },
-        orderBy: [{ field: { fieldPath: "captured_at" }, direction: "DESCENDING" }]
-      }
-    })
-  });
-  if (!res.ok) throw new Error("Fetch failed.");
-  const data = await res.json();
-  const docs = data
-    .map((row) => row.document)
-    .filter(Boolean)
-    .map(parseFirestoreDoc);
-  cachedApps = docs;
-  renderList();
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.idToken}`
+      },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: "applications" }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: "user_id" },
+              op: "EQUAL",
+              value: { stringValue: auth.localId }
+            }
+          },
+          orderBy: [
+            { field: { fieldPath: "captured_at" }, direction: "DESCENDING" }
+          ]
+        }
+      })
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "Fetch failed.");
+    }
+    const data = await res.json();
+    const docs = data
+      .map((row) => row.document)
+      .filter(Boolean)
+      .map(parseFirestoreDoc);
+    cachedApps = docs;
+    renderList();
+    if (el.syncStatus) {
+      const when = new Date().toLocaleTimeString();
+      el.syncStatus.textContent = `Last sync: ${when}`;
+    }
+  } catch (err) {
+    if (el.syncStatus) el.syncStatus.textContent = `Sync error: ${err.message}`;
+  }
   isFetching = false;
 }
 
@@ -405,6 +345,74 @@ async function updateStatus(docId, status) {
 }
 
 el.search.addEventListener("input", renderList);
+el.refresh.addEventListener("click", async () => {
+  const auth = await getValidAuth().catch(() => null);
+  if (auth) await fetchApplications(auth);
+});
+
+function openModal() {
+  if (el.modal) el.modal.classList.remove("hidden");
+}
+
+function closeModal() {
+  if (el.modal) el.modal.classList.add("hidden");
+}
+
+async function clearAllApplications() {
+  const auth = await getValidAuth().catch(() => null);
+  if (!auth) return;
+  if (el.syncStatus) el.syncStatus.textContent = "Deleting...";
+
+  const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents:runQuery`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${auth.idToken}`
+    },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: "applications" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "user_id" },
+            op: "EQUAL",
+            value: { stringValue: auth.localId }
+          }
+        }
+      }
+    })
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Fetch failed.");
+  }
+  const data = await res.json();
+  const docNames = data.map((row) => row.document && row.document.name).filter(Boolean);
+  if (!docNames.length) {
+    cachedApps = [];
+    renderList();
+    if (el.syncStatus) el.syncStatus.textContent = "No applications to delete.";
+    return;
+  }
+
+  for (const name of docNames) {
+    const deleteUrl = `https://firestore.googleapis.com/v1/${name}`;
+    const delRes = await fetch(deleteUrl, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${auth.idToken}`
+      }
+    });
+    if (!delRes.ok) {
+      const text = await delRes.text();
+      throw new Error(text || "Delete failed.");
+    }
+  }
+  cachedApps = [];
+  renderList();
+  if (el.syncStatus) el.syncStatus.textContent = "All applications deleted.";
+}
 
 el.signUp.addEventListener("click", async () => {
   setAuthStatus("");
@@ -448,19 +456,6 @@ el.signIn.addEventListener("click", async () => {
   }
 });
 
-el.googleSignIn.addEventListener("click", async () => {
-  setAuthStatus("");
-  try {
-    const auth = await googleAuthFlow();
-    await saveAuth(auth, el.rememberMe.checked);
-    updateUI(auth);
-    setAuthStatus("Signed in with Google.");
-    await fetchApplications(auth);
-  } catch (err) {
-    setAuthStatus(err.message, true);
-  }
-});
-
 el.signOut.addEventListener("click", async () => {
   await clearAuth();
   updateUI(null);
@@ -468,6 +463,19 @@ el.signOut.addEventListener("click", async () => {
   cachedApps = [];
   renderList();
 });
+
+if (el.clearAll) el.clearAll.addEventListener("click", openModal);
+if (el.modalCancel) el.modalCancel.addEventListener("click", closeModal);
+if (el.modalConfirm) {
+  el.modalConfirm.addEventListener("click", async () => {
+    closeModal();
+    try {
+      await clearAllApplications();
+    } catch (err) {
+      if (el.syncStatus) el.syncStatus.textContent = `Delete error: ${err.message}`;
+    }
+  });
+}
 
 async function init() {
   if (!requireConfig()) return;
@@ -488,10 +496,37 @@ async function init() {
   }
 }
 
+async function handleAuthChange() {
+  const auth = await getValidAuth().catch(() => null);
+  updateUI(auth);
+  if (auth) {
+    await fetchApplications(auth);
+  } else {
+    cachedApps = [];
+    renderList();
+  }
+}
+
 init();
 
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible") return;
   const auth = await getValidAuth().catch(() => null);
   if (auth) await fetchApplications(auth);
+});
+
+if (chrome.storage && chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local" && areaName !== "session") return;
+    if (changes[STORAGE_KEY] || changes[REMEMBER_KEY]) {
+      handleAuthChange();
+    }
+  });
+}
+
+window.addEventListener("beforeunload", async () => {
+  const auth = await loadAuth().catch(() => null);
+  if (auth && auth.sessionOnly) {
+    await clearAuth();
+  }
 });

@@ -4,7 +4,6 @@
 
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
   background: #f3f3f3;
   color: #111;
 }
@@ -33,14 +32,6 @@ body {
   max-width: 1000px;
   margin: 20px auto;
   padding: 0 16px;
-}
-
-.card {
-  background: #fff;
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 16px;
-  border: 1px solid #e6e6e6;
 }
 
 h2 {
@@ -76,25 +67,8 @@ input {
   justify-content: space-between;
 }
 
-button {
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid #111;
-  background: #111;
-  color: #fff;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-button.ghost {
-  background: #fff;
-  color: #111;
-}
-
-.google {
-  background: #fff;
-  color: #111;
-  border-color: #ddd;
+.row.end {
+  justify-content: flex-end;
 }
 
 .checkbox {
@@ -202,4 +176,30 @@ button.ghost {
   .row-item {
     grid-template-columns: 1fr;
   }
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 999;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  width: 100%;
+  max-width: 360px;
+  border: 1px solid #eee;
+  display: grid;
+  gap: 10px;
 }

@@ -8,7 +8,6 @@ const el = {
   rememberMe: document.getElementById("remember-me"),
   signIn: document.getElementById("sign-in"),
   signUp: document.getElementById("sign-up"),
-  googleSignIn: document.getElementById("google-sign-in"),
   signOut: document.getElementById("sign-out"),
   openDashboard: document.getElementById("open-dashboard"),
   capture: document.getElementById("capture"),
@@ -18,10 +17,6 @@ const el = {
 
 const STORAGE_KEY = "applycontrol_auth";
 const REMEMBER_KEY = "applycontrol_remember";
-
-function storageArea(name) {
-  return chrome.storage && chrome.storage[name] ? chrome.storage[name] : null;
-}
 
 function setStatus(message, isError = false) {
   el.status.textContent = message || "";
@@ -38,19 +33,6 @@ function requireConfig() {
 
 function loadAuth() {
   return new Promise((resolve) => {
-    const session = storageArea("session");
-    if (session) {
-      session.get([STORAGE_KEY], (result) => {
-        if (result && result[STORAGE_KEY]) {
-          resolve(result[STORAGE_KEY]);
-        } else {
-          chrome.storage.local.get([STORAGE_KEY], (localResult) => {
-            resolve(localResult[STORAGE_KEY] || null);
-          });
-        }
-      });
-      return;
-    }
     chrome.storage.local.get([STORAGE_KEY], (result) => {
       resolve(result[STORAGE_KEY] || null);
     });
@@ -59,34 +41,15 @@ function loadAuth() {
 
 function saveAuth(data, remember) {
   return new Promise((resolve) => {
-    const session = storageArea("session");
     chrome.storage.local.set({ [REMEMBER_KEY]: remember }, () => {
-      if (remember) {
-        chrome.storage.local.set({ [STORAGE_KEY]: data }, () => {
-          if (session) session.remove([STORAGE_KEY], resolve);
-          else resolve();
-        });
-        return;
-      }
-      chrome.storage.local.remove([STORAGE_KEY], () => {
-        if (session) {
-          session.set({ [STORAGE_KEY]: data }, resolve);
-        } else {
-          chrome.storage.local.set({ [STORAGE_KEY]: data }, resolve);
-        }
-      });
+      chrome.storage.local.set({ [STORAGE_KEY]: { ...data, sessionOnly: !remember } }, resolve);
     });
   });
 }
 
 function clearAuth() {
   return new Promise((resolve) => {
-    const session = storageArea("session");
-    const done = () => {
-      chrome.storage.local.remove([STORAGE_KEY, REMEMBER_KEY], resolve);
-    };
-    if (session) session.remove([STORAGE_KEY], done);
-    else done();
+    chrome.storage.local.remove([STORAGE_KEY, REMEMBER_KEY], resolve);
   });
 }
 
@@ -111,8 +74,14 @@ async function signUp(email, password) {
       body: JSON.stringify({ email, password, returnSecureToken: true })
     }
   );
-  if (!res.ok) throw new Error("Sign up failed.");
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data && data.error && data.error.message
+      ? data.error.message
+      : "Sign up failed.";
+    throw new Error(msg);
+  }
+  return data;
 }
 
 async function signIn(email, password) {
@@ -124,8 +93,14 @@ async function signIn(email, password) {
       body: JSON.stringify({ email, password, returnSecureToken: true })
     }
   );
-  if (!res.ok) throw new Error("Sign in failed.");
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data && data.error && data.error.message
+      ? data.error.message
+      : "Sign in failed.";
+    throw new Error(msg);
+  }
+  return data;
 }
 
 async function refreshToken(refreshTokenValue) {
@@ -139,82 +114,14 @@ async function refreshToken(refreshTokenValue) {
       )}`
     }
   );
-  if (!res.ok) throw new Error("Token refresh failed.");
-  return res.json();
-}
-
-async function signInWithIdp(accessToken, requestUri) {
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${config.firebaseApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        postBody: `access_token=${encodeURIComponent(
-          accessToken
-        )}&providerId=google.com`,
-        requestUri,
-        returnIdpCredential: true,
-        returnSecureToken: true
-      })
-    }
-  );
-  if (!res.ok) throw new Error("Google sign-in failed.");
-  return res.json();
-}
-
-function parseFragmentParams(fragment) {
-  const params = new URLSearchParams(fragment.replace(/^#/, ""));
-  const out = {};
-  for (const [key, value] of params.entries()) out[key] = value;
-  return out;
-}
-
-async function googleAuthFlow() {
-  if (!config.googleClientId || config.googleClientId.startsWith("YOUR_")) {
-    throw new Error("Missing Google OAuth client ID.");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data && data.error && data.error.message
+      ? data.error.message
+      : "Token refresh failed.";
+    throw new Error(msg);
   }
-  if (!chrome.identity || !chrome.identity.launchWebAuthFlow) {
-    throw new Error("Google sign-in not supported in this browser.");
-  }
-  const redirectUri = chrome.identity.getRedirectURL("oauth2");
-  const authUrl =
-    "https://accounts.google.com/o/oauth2/v2/auth" +
-    `?client_id=${encodeURIComponent(config.googleClientId)}` +
-    `&response_type=token` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&scope=${encodeURIComponent("openid email profile")}` +
-    `&prompt=select_account`;
-
-  const redirectUrl = await new Promise((resolve, reject) => {
-    chrome.identity.launchWebAuthFlow(
-      { url: authUrl, interactive: true },
-      (resultUrl) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        if (!resultUrl) {
-          reject(new Error("No redirect URL."));
-          return;
-        }
-        resolve(resultUrl);
-      }
-    );
-  });
-
-  const fragment = redirectUrl.split("#")[1] || "";
-  const params = parseFragmentParams(fragment);
-  if (!params.access_token) throw new Error("Missing access token.");
-  const data = await signInWithIdp(params.access_token, redirectUri);
-  const expiresAt = Date.now() + Number(data.expiresIn) * 1000;
-  return {
-    email: data.email,
-    localId: data.localId,
-    idToken: data.idToken,
-    refreshToken: data.refreshToken,
-    expiresAt
-  };
+  return data;
 }
 
 async function getValidAuth() {
@@ -264,6 +171,48 @@ async function saveApplication(auth, payload) {
   return res.json();
 }
 
+async function hasExistingApplication(auth, urlToCheck) {
+  const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents:runQuery`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${auth.idToken}`
+    },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: "applications" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "user_id" },
+            op: "EQUAL",
+            value: { stringValue: auth.localId }
+          }
+        }
+      }
+    })
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  for (const row of data) {
+    const doc = row.document;
+    if (!doc || !doc.fields || !doc.fields.url) continue;
+    const existingUrl = doc.fields.url.stringValue || "";
+    if (existingUrl === urlToCheck) return true;
+  }
+  return false;
+}
+
+function normalizeUrl(raw) {
+  try {
+    const u = new URL(raw);
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
 function getActiveTab() {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -276,6 +225,7 @@ function updateUI(auth) {
   const signedIn = !!auth;
   el.authSection.classList.toggle("hidden", signedIn);
   el.appSection.classList.toggle("hidden", !signedIn);
+  el.openDashboard.classList.toggle("hidden", !signedIn);
   el.userLabel.textContent = signedIn ? `Signed in: ${auth.email}` : "";
 }
 
@@ -310,6 +260,11 @@ async function init() {
       el.capture.disabled = false;
     }
   }
+}
+
+async function handleAuthChange() {
+  const auth = await getValidAuth().catch(() => null);
+  updateUI(auth);
 }
 
 el.signUp.addEventListener("click", async () => {
@@ -354,19 +309,6 @@ el.signIn.addEventListener("click", async () => {
   }
 });
 
-el.googleSignIn.addEventListener("click", async () => {
-  if (!requireConfig()) return;
-  setStatus("");
-  try {
-    const auth = await googleAuthFlow();
-    await saveAuth(auth, el.rememberMe.checked);
-    updateUI(auth);
-    setStatus("Signed in with Google.");
-  } catch (err) {
-    setStatus(err.message, true);
-  }
-});
-
 el.signOut.addEventListener("click", async () => {
   await clearAuth();
   updateUI(null);
@@ -396,6 +338,12 @@ el.capture.addEventListener("click", async () => {
       return;
     }
     const url = new URL(tab.url);
+    const normalizedUrl = normalizeUrl(tab.url);
+    const exists = await hasExistingApplication(auth, normalizedUrl);
+    if (exists) {
+      setStatus("Already saved.", true);
+      return;
+    }
     let extracted = {};
     try {
       extracted = await new Promise((resolve) => {
@@ -415,7 +363,7 @@ el.capture.addEventListener("click", async () => {
       extracted = {};
     }
     await saveApplication(auth, {
-      url: tab.url,
+      url: normalizedUrl,
       title: extracted.title || tab.title || tab.url,
       company: extracted.company || "",
       location: extracted.location || "",
@@ -425,6 +373,22 @@ el.capture.addEventListener("click", async () => {
     setStatus("Saved.");
   } catch (err) {
     setStatus(err.message, true);
+  }
+});
+
+if (chrome.storage && chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local" && areaName !== "session") return;
+    if (changes[STORAGE_KEY] || changes[REMEMBER_KEY]) {
+      handleAuthChange();
+    }
+  });
+}
+
+window.addEventListener("beforeunload", async () => {
+  const auth = await loadAuth().catch(() => null);
+  if (auth && auth.sessionOnly) {
+    await clearAuth();
   }
 });
 
