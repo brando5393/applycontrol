@@ -34,10 +34,22 @@ Copy and fill in config files:
 - `extension/config.js` from `extension/config.example.js`
 - `dashboard/config.js` from `dashboard/config.example.js`
 
+### Quick Setup Scripts
+Generate local config files from templates:
+
+PowerShell (Windows):
+```
+.\scripts\setup.ps1
+```
+
+macOS/Linux (bash):
+```
+./scripts/setup.sh
+```
+
 ## Run Dashboard (static)
 Serve `dashboard/` with any static server.
 
 ## Load Extension
 1. Chrome/Edge: `chrome://extensions` → Developer mode → Load unpacked → select `extension/`
 2. Firefox: `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → select `extension/manifest.json`
-
