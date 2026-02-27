@@ -6,6 +6,7 @@ body {
   margin: 0;
   background: #f3f3f3;
   color: #111;
+  font-family: "IBM Plex Serif", serif;
 }
 
 .top {
@@ -20,7 +21,13 @@ body {
 .top h1 {
   margin: 0;
   font-size: 18px;
+  font-family: "Story Script", serif;
 }
+
+h2 {
+  font-family: "Story Script", serif;
+}
+
 
 .brand {
   display: grid;

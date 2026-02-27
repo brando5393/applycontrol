@@ -6,6 +6,7 @@ body {
   margin: 0;
   background: #f6f6f6;
   color: #111;
+  font-family: "IBM Plex Serif", serif;
 }
 
 .callout {
@@ -16,7 +17,13 @@ body {
 h1 {
   margin: 0;
   font-size: 18px;
+  font-family: "Story Script", serif;
 }
+
+h2 {
+  font-family: "Story Script", serif;
+}
+
 
 .popup-header {
   background: linear-gradient(135deg, #314CB6 0%, #3F5AD6 50%, #4D69F0 100%);
