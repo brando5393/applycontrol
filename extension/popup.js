@@ -365,10 +365,6 @@ function closeFeedbackModal() {
 }
 
 async function submitFeedback() {
-  if (!config.feedbackFunctionUrl) {
-    setFeedbackStatus("Feedback is not configured.", true);
-    return;
-  }
   const auth = await getValidAuth().catch(() => null);
   if (!auth) {
     setFeedbackStatus("Please sign in first.", true);
@@ -384,18 +380,39 @@ async function submitFeedback() {
   const version = chrome.runtime && chrome.runtime.getManifest
     ? chrome.runtime.getManifest().version
     : "n/a";
-  const res = await fetch(config.feedbackFunctionUrl, {
+  const ua = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  const appVersion = navigator.appVersion || "";
+  const userAgentData = navigator.userAgentData
+    ? {
+        platform: navigator.userAgentData.platform || "",
+        mobile: !!navigator.userAgentData.mobile,
+        brands: navigator.userAgentData.brands || []
+      }
+    : null;
+  const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents/feedback`;
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${auth.idToken}`
     },
     body: JSON.stringify({
-      title,
-      message,
-      version,
-      pageUrl: "",
-      userAgent: navigator.userAgent
+      fields: {
+        user_id: { stringValue: auth.localId },
+        email: { stringValue: auth.email || "" },
+        title: { stringValue: title },
+        message: { stringValue: message },
+        version: { stringValue: version },
+        page_url: { stringValue: "" },
+        user_agent: { stringValue: ua },
+        platform: { stringValue: platform },
+        app_version: { stringValue: appVersion },
+        user_agent_data: userAgentData
+          ? { stringValue: JSON.stringify(userAgentData) }
+          : { stringValue: "" },
+        created_at: { timestampValue: new Date().toISOString() }
+      }
     })
   });
   if (!res.ok) {

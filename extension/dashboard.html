@@ -21,11 +21,20 @@
         <p class="tagline">Apply Control to your job search process.</p>
       </div>
       <div class="right">
-        <span id="user-label"></span>
-        <button id="sign-out" class="button secondary hidden">
-          <span class="material-symbols-outlined icon">logout</span>
-          Sign out
-        </button>
+        <div class="dropdown hidden" id="account-menu">
+          <button class="button secondary dropdown-toggle" id="account-toggle" aria-expanded="false">
+            <span class="material-symbols-outlined icon">account_circle</span>
+            <span id="user-label"></span>
+            <span class="material-symbols-outlined icon">expand_more</span>
+          </button>
+          <div class="dropdown-panel hidden" id="account-panel" role="menu">
+            <button class="dropdown-item" id="about-toggle" role="menuitem">About</button>
+            <button class="dropdown-item" id="sign-out" role="menuitem">Sign out</button>
+            <button class="dropdown-item danger" id="delete-account" role="menuitem">
+              Delete my account
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -122,6 +131,7 @@
       <div class="modal-card" tabindex="-1">
         <h3 id="feedback-title">Send Feedback</h3>
         <p id="feedback-desc" class="meta">Share a bug or idea. This creates a ticket for the dev team.</p>
+        <p class="meta">We store your message and basic device info (browser/OS/version) to troubleshoot.</p>
         <label for="feedback-title-input">Title</label>
         <input id="feedback-title-input" type="text" placeholder="Short summary" />
         <label for="feedback-message-input">Details</label>
@@ -131,6 +141,33 @@
           <button id="feedback-submit" class="button">Submit</button>
         </div>
         <p id="feedback-status" class="status" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <div id="about-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="about-title">About ApplyControl</h3>
+        <p class="meta">Version: <span id="about-version"></span></p>
+        <p>ApplyControl helps you capture and track job applications with minimal effort.</p>
+        <p class="meta">You can delete your account and all associated data at any time.</p>
+        <p class="meta">Privacy policy: <a href="#" id="privacy-link">View privacy policy</a></p>
+        <div class="row end">
+          <button id="about-close" class="button secondary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="delete-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="delete-title" aria-describedby="delete-desc">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="delete-title">Delete account?</h3>
+        <p id="delete-desc" class="meta">This permanently removes your account and all data (applications and feedback).</p>
+        <label for="delete-password">Confirm password</label>
+        <input id="delete-password" type="password" placeholder="Enter your password" autocomplete="current-password" />
+        <div class="row end">
+          <button id="delete-cancel" class="button secondary">Cancel</button>
+          <button id="delete-confirm" class="button alert">Delete account</button>
+        </div>
+        <p id="delete-status" class="status" role="status" aria-live="polite"></p>
       </div>
     </div>
 

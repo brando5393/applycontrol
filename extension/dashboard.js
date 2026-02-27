@@ -19,6 +19,20 @@ const el = {
   refresh: document.getElementById("refresh"),
   clearAll: document.getElementById("clear-all"),
   feedbackToggle: document.getElementById("feedback-toggle"),
+  accountMenu: document.getElementById("account-menu"),
+  accountToggle: document.getElementById("account-toggle"),
+  accountPanel: document.getElementById("account-panel"),
+  aboutToggle: document.getElementById("about-toggle"),
+  aboutModal: document.getElementById("about-modal"),
+  aboutClose: document.getElementById("about-close"),
+  aboutVersion: document.getElementById("about-version"),
+  privacyLink: document.getElementById("privacy-link"),
+  deleteAccount: document.getElementById("delete-account"),
+  deleteModal: document.getElementById("delete-modal"),
+  deleteCancel: document.getElementById("delete-cancel"),
+  deleteConfirm: document.getElementById("delete-confirm"),
+  deletePassword: document.getElementById("delete-password"),
+  deleteStatus: document.getElementById("delete-status"),
   modal: document.getElementById("modal"),
   modalCancel: document.getElementById("modal-cancel"),
   modalConfirm: document.getElementById("modal-confirm"),
@@ -50,6 +64,12 @@ let lastFocused = null;
 function setAuthStatus(message, isError = false) {
   el.authStatus.textContent = message || "";
   el.authStatus.style.color = isError ? "#b00020" : "#2b7a2b";
+}
+
+function setDeleteStatus(message, isError = false) {
+  if (!el.deleteStatus) return;
+  el.deleteStatus.textContent = message || "";
+  el.deleteStatus.style.color = isError ? "#b00020" : "#2b7a2b";
 }
 
 function setFeedbackStatus(message, isError = false) {
@@ -186,8 +206,8 @@ function updateUI(auth) {
   const signedIn = !!auth;
   el.authSection.classList.toggle("hidden", signedIn);
   el.appSection.classList.toggle("hidden", !signedIn);
-  el.signOut.classList.toggle("hidden", !signedIn);
   el.userLabel.textContent = signedIn ? auth.email : "";
+  if (el.accountMenu) el.accountMenu.classList.toggle("hidden", !signedIn);
   if (auth && auth.stale && el.syncStatus) {
     el.syncStatus.textContent = "Session expired. Please sign in again.";
   }
@@ -421,6 +441,107 @@ function closeModal() {
   }
 }
 
+function openAboutModal() {
+  if (!el.aboutModal) return;
+  lastFocused = document.activeElement;
+  el.aboutModal.classList.remove("hidden");
+  if (el.aboutClose) el.aboutClose.focus();
+  if (el.aboutVersion && chrome.runtime && chrome.runtime.getManifest) {
+    el.aboutVersion.textContent = chrome.runtime.getManifest().version || "n/a";
+  }
+}
+
+function closeAboutModal() {
+  if (!el.aboutModal) return;
+  el.aboutModal.classList.add("hidden");
+  if (lastFocused && typeof lastFocused.focus === "function") {
+    lastFocused.focus();
+  }
+}
+
+function openDeleteModal() {
+  if (!el.deleteModal) return;
+  lastFocused = document.activeElement;
+  el.deleteModal.classList.remove("hidden");
+  if (el.deletePassword) el.deletePassword.focus();
+  setDeleteStatus("");
+}
+
+function closeDeleteModal() {
+  if (!el.deleteModal) return;
+  el.deleteModal.classList.add("hidden");
+  if (el.deletePassword) el.deletePassword.value = "";
+  if (lastFocused && typeof lastFocused.focus === "function") {
+    lastFocused.focus();
+  }
+}
+
+function toggleAccountMenu(forceOpen) {
+  if (!el.accountPanel || !el.accountToggle) return;
+  const isOpen = !el.accountPanel.classList.contains("hidden");
+  const next = typeof forceOpen === "boolean" ? forceOpen : !isOpen;
+  el.accountPanel.classList.toggle("hidden", !next);
+  el.accountToggle.setAttribute("aria-expanded", next ? "true" : "false");
+}
+
+async function deleteAccountAndData(password) {
+  const auth = await getValidAuth().catch(() => null);
+  if (!auth || !auth.email) throw new Error("Not signed in.");
+  const signInRes = await signIn(auth.email, password);
+  if (!signInRes || !signInRes.idToken) throw new Error("Password incorrect.");
+
+  const idToken = signInRes.idToken;
+  const userId = signInRes.localId;
+
+  const deleteAllFromCollection = async (collectionId) => {
+    const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents:runQuery`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`
+      },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: "user_id" },
+              op: "EQUAL",
+              value: { stringValue: userId }
+            }
+          }
+        }
+      })
+    });
+    if (!res.ok) throw new Error("Fetch failed.");
+    const data = await res.json();
+    const docNames = data.map((row) => row.document && row.document.name).filter(Boolean);
+    for (const name of docNames) {
+      const deleteUrl = `https://firestore.googleapis.com/v1/${name}`;
+      await fetch(deleteUrl, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${idToken}` }
+      });
+    }
+  };
+
+  await deleteAllFromCollection("applications");
+  await deleteAllFromCollection("feedback");
+
+  const deleteUserRes = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${config.firebaseApiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken })
+    }
+  );
+  if (!deleteUserRes.ok) {
+    const text = await deleteUserRes.text();
+    throw new Error(text || "Account delete failed.");
+  }
+}
 function openFeedbackModal() {
   if (!el.feedbackModal) return;
   lastFocused = document.activeElement;
@@ -440,10 +561,6 @@ function closeFeedbackModal() {
 }
 
 async function submitFeedback() {
-  if (!config.feedbackFunctionUrl) {
-    setFeedbackStatus("Feedback is not configured.", true);
-    return;
-  }
   const auth = await getValidAuth().catch(() => null);
   if (!auth) {
     setFeedbackStatus("Please sign in first.", true);
@@ -459,18 +576,39 @@ async function submitFeedback() {
   const version = chrome.runtime && chrome.runtime.getManifest
     ? chrome.runtime.getManifest().version
     : "n/a";
-  const res = await fetch(config.feedbackFunctionUrl, {
+  const ua = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  const appVersion = navigator.appVersion || "";
+  const userAgentData = navigator.userAgentData
+    ? {
+        platform: navigator.userAgentData.platform || "",
+        mobile: !!navigator.userAgentData.mobile,
+        brands: navigator.userAgentData.brands || []
+      }
+    : null;
+  const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents/feedback`;
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${auth.idToken}`
     },
     body: JSON.stringify({
-      title,
-      message,
-      version,
-      pageUrl: location.href,
-      userAgent: navigator.userAgent
+      fields: {
+        user_id: { stringValue: auth.localId },
+        email: { stringValue: auth.email || "" },
+        title: { stringValue: title },
+        message: { stringValue: message },
+        version: { stringValue: version },
+        page_url: { stringValue: location.href },
+        user_agent: { stringValue: ua },
+        platform: { stringValue: platform },
+        app_version: { stringValue: appVersion },
+        user_agent_data: userAgentData
+          ? { stringValue: JSON.stringify(userAgentData) }
+          : { stringValue: "" },
+        created_at: { timestampValue: new Date().toISOString() }
+      }
     })
   });
   if (!res.ok) {
@@ -607,10 +745,54 @@ if (el.feedbackToggle) el.feedbackToggle.addEventListener("click", openFeedbackM
 if (el.feedbackCancel) el.feedbackCancel.addEventListener("click", closeFeedbackModal);
 if (el.feedbackSubmit) el.feedbackSubmit.addEventListener("click", submitFeedback);
 
+if (el.accountToggle) el.accountToggle.addEventListener("click", () => toggleAccountMenu());
+document.addEventListener("click", (e) => {
+  if (!el.accountMenu || !el.accountPanel) return;
+  if (!el.accountMenu.contains(e.target)) {
+    toggleAccountMenu(false);
+  }
+});
+if (el.aboutToggle) el.aboutToggle.addEventListener("click", () => {
+  toggleAccountMenu(false);
+  openAboutModal();
+});
+if (el.aboutClose) el.aboutClose.addEventListener("click", closeAboutModal);
+if (el.privacyLink) {
+  el.privacyLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: chrome.runtime.getURL("privacy.html") });
+  });
+}
+
+if (el.deleteAccount) el.deleteAccount.addEventListener("click", () => {
+  toggleAccountMenu(false);
+  openDeleteModal();
+});
+if (el.deleteCancel) el.deleteCancel.addEventListener("click", closeDeleteModal);
+if (el.deleteConfirm) el.deleteConfirm.addEventListener("click", async () => {
+  try {
+    const password = el.deletePassword ? el.deletePassword.value : "";
+    if (!password) {
+      setDeleteStatus("Please enter your password.", true);
+      return;
+    }
+    setDeleteStatus("Deleting account...");
+    await deleteAccountAndData(password);
+    await clearAuth();
+    closeDeleteModal();
+    updateUI(null);
+    setAuthStatus("Account deleted.");
+  } catch (err) {
+    setDeleteStatus(err.message || "Delete failed.", true);
+  }
+});
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (el.modal && !el.modal.classList.contains("hidden")) closeModal();
     if (el.feedbackModal && !el.feedbackModal.classList.contains("hidden")) closeFeedbackModal();
+    if (el.aboutModal && !el.aboutModal.classList.contains("hidden")) closeAboutModal();
+    if (el.deleteModal && !el.deleteModal.classList.contains("hidden")) closeDeleteModal();
   }
 });
 
