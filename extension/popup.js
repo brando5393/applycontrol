@@ -172,6 +172,8 @@ async function saveApplication(auth, payload) {
   if (payload.location) fields.location = { stringValue: payload.location };
   if (payload.description)
     fields.description = { stringValue: payload.description };
+  if (payload.fingerprint)
+    fields.fingerprint = { stringValue: payload.fingerprint };
 
   const res = await fetch(url, {
     method: "POST",
@@ -187,7 +189,7 @@ async function saveApplication(auth, payload) {
   return res.json();
 }
 
-async function hasExistingApplication(auth, urlToCheck) {
+async function getExistingApplications(auth) {
   const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents:runQuery`;
   const res = await fetch(url, {
     method: "POST",
@@ -208,17 +210,51 @@ async function hasExistingApplication(auth, urlToCheck) {
       }
     })
   });
-  if (!res.ok) return false;
+  if (!res.ok) return [];
   const data = await res.json();
+  const out = [];
   for (const row of data) {
     const doc = row.document;
-    if (!doc || !doc.fields || !doc.fields.url) continue;
-    const existingUrl = doc.fields.url.stringValue || "";
-    if (existingUrl === urlToCheck) return true;
+    if (!doc || !doc.fields) continue;
+    out.push({
+      url: doc.fields.url ? doc.fields.url.stringValue || "" : "",
+      title: doc.fields.title ? doc.fields.title.stringValue || "" : "",
+      fingerprint: doc.fields.fingerprint ? doc.fields.fingerprint.stringValue || "" : "",
+      company: doc.fields.company ? doc.fields.company.stringValue || "" : ""
+    });
   }
-  return false;
+  return out;
 }
 
+function isDuplicate(existing, candidate) {
+  if (!existing || !candidate) return false;
+  const sameFingerprint =
+    existing.fingerprint && candidate.fingerprint &&
+    existing.fingerprint === candidate.fingerprint;
+  const sameUrlTitleCompany =
+    existing.url &&
+    candidate.url &&
+    existing.url === candidate.url &&
+    existing.title &&
+    candidate.title &&
+    existing.title === candidate.title &&
+    (existing.company || "") === (candidate.company || "");
+  return sameFingerprint || sameUrlTitleCompany;
+}
+
+function hasDuplicate(existingList, candidate) {
+  return existingList.some((e) => isDuplicate(e, candidate));
+}
+
+function isListPageUrl(urlValue) {
+  try {
+    const u = new URL(urlValue);
+    const path = u.pathname.toLowerCase();
+    return path.includes("/jobs/q-") || path.includes("/jobs/search") || (path.includes("/jobs/") && u.search.includes("q="));
+  } catch {
+    return false;
+  }
+}
 function normalizeUrl(raw) {
   try {
     const u = new URL(raw);
@@ -227,6 +263,14 @@ function normalizeUrl(raw) {
   } catch {
     return raw;
   }
+}
+
+function makeFingerprint({ title, company, location, source, description }) {
+  const descSnippet = (description || "").toLowerCase().trim().slice(0, 200);
+  const base = [title, company, location, source, descSnippet]
+    .map((v) => (v || "").toLowerCase().trim())
+    .join("|");
+  return base.replace(/\s+/g, " ");
 }
 
 function sanitizeText(value, { preserveLineBreaks = true } = {}) {
@@ -303,7 +347,7 @@ async function handleAuthChange() {
 
 el.signUp.addEventListener("click", async () => {
   if (!requireConfig()) return;
-  setStatus("");
+  setStatus("Signing up...");
   try {
     const data = await signUp(el.email.value, el.password.value);
     const expiresAt = Date.now() + Number(data.expiresIn) * 1000;
@@ -324,7 +368,7 @@ el.signUp.addEventListener("click", async () => {
 
 el.signIn.addEventListener("click", async () => {
   if (!requireConfig()) return;
-  setStatus("");
+  setStatus("Signing in...");
   try {
     const data = await signIn(el.email.value, el.password.value);
     const expiresAt = Date.now() + Number(data.expiresIn) * 1000;
@@ -467,11 +511,6 @@ el.capture.addEventListener("click", async () => {
     }
     const url = new URL(tab.url);
     const normalizedUrl = normalizeUrl(tab.url);
-    const exists = await hasExistingApplication(auth, normalizedUrl);
-    if (exists) {
-      setStatus("Already saved.", true);
-      return;
-    }
     let extracted = {};
     try {
       extracted = await new Promise((resolve) => {
@@ -490,13 +529,40 @@ el.capture.addEventListener("click", async () => {
     } catch {
       extracted = {};
     }
+    const candidateTitle = sanitizeText(extracted.title || tab.title || tab.url, { preserveLineBreaks: false });
+    const candidateCompany = sanitizeText(extracted.company || "", { preserveLineBreaks: false });
+    const candidateLocation = sanitizeText(extracted.location || "", { preserveLineBreaks: false });
+    const candidateDescription = sanitizeText(extracted.description || "", { preserveLineBreaks: true });
+    const fingerprint = makeFingerprint({
+      title: candidateTitle,
+      company: candidateCompany,
+      location: candidateLocation,
+      source: url.hostname,
+      description: candidateDescription
+    });
+    const usableFingerprint = candidateDescription && candidateDescription.length >= 40
+      ? fingerprint
+      : "";
+    const existing = await getExistingApplications(auth);
+    const ignoreUrl = url.hostname.includes("monster.") && isListPageUrl(normalizedUrl);
+    if (hasDuplicate(existing, {
+      url: ignoreUrl ? "" : normalizedUrl,
+      title: candidateTitle,
+      fingerprint: usableFingerprint,
+      company: candidateCompany
+    })) {
+      setStatus("Already saved.", true);
+      return;
+    }
+
     await saveApplication(auth, {
       url: normalizedUrl,
-      title: sanitizeText(extracted.title || tab.title || tab.url, { preserveLineBreaks: false }),
-      company: sanitizeText(extracted.company || "", { preserveLineBreaks: false }),
-      location: sanitizeText(extracted.location || "", { preserveLineBreaks: false }),
-      description: sanitizeText(extracted.description || "", { preserveLineBreaks: true }),
-      source: url.hostname
+      title: candidateTitle,
+      company: candidateCompany,
+      location: candidateLocation,
+      description: candidateDescription,
+      source: url.hostname,
+      fingerprint: usableFingerprint
     });
     setStatus("Saved.");
   } catch (err) {

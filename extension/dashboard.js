@@ -752,7 +752,7 @@ async function clearAllApplications() {
 }
 
 el.signUp.addEventListener("click", async () => {
-  setAuthStatus("");
+  setAuthStatus("Signing up...");
   try {
     const data = await signUp(el.email.value, el.password.value);
     const expiresAt = Date.now() + Number(data.expiresIn) * 1000;
@@ -773,7 +773,7 @@ el.signUp.addEventListener("click", async () => {
 });
 
 el.signIn.addEventListener("click", async () => {
-  setAuthStatus("");
+  setAuthStatus("Signing in...");
   try {
     const data = await signIn(el.email.value, el.password.value);
     const expiresAt = Date.now() + Number(data.expiresIn) * 1000;

@@ -65,6 +65,55 @@ function extractTitle() {
   );
 }
 
+function findActiveCard() {
+  const active = document.querySelector(
+    "[aria-selected='true'], .selected, .active, .is-active, .job-selected"
+  );
+  if (active) return active;
+  const cards = document.querySelectorAll(
+    "[data-testid*='jobcard'], [data-testid*='job-card'], .job-card, .jobCard, .tapItem, .result, .card"
+  );
+  return cards && cards[0] ? cards[0] : null;
+}
+
+function extractFromCard(card) {
+  if (!card) return {};
+  const getCardText = (sel) => {
+    const el = card.querySelector(sel);
+    return el && el.textContent ? el.textContent.trim() : "";
+  };
+  return {
+    title:
+      getCardText("[data-testid*='job-title']") ||
+      getCardText(".jobTitle") ||
+      getCardText("h2") ||
+      getCardText("h3") ||
+      getCardText("a"),
+    company:
+      getCardText("[data-testid*='company']") ||
+      getCardText(".company") ||
+      getCardText(".companyName") ||
+      getCardText("[class*='company']"),
+    location:
+      getCardText("[data-testid*='location']") ||
+      getCardText(".location") ||
+      getCardText("[class*='location']"),
+    description:
+      getCardText(".job-snippet") ||
+      getCardText("[data-testid*='snippet']") ||
+      ""
+  };
+}
+
+function extractFromListView() {
+  const listRoot = document.querySelector(
+    "#mosaic-provider-jobcards, [data-testid='job-list'], [data-testid='jobs-list'], .jobs-list, .job-list"
+  );
+  const card = findActiveCard();
+  if (!listRoot && !card) return {};
+  return extractFromCard(card);
+}
+
 function getText(selector) {
   const el = document.querySelector(selector);
   if (!el || !el.textContent) return "";
@@ -106,7 +155,8 @@ function extractMonster() {
     description:
       getText("#JobDescription") ||
       getText(".job-description") ||
-      getText("[data-testid='job-description']")
+      getText("[data-testid='job-description']") ||
+      getText("[data-testid='jobDescription']")
   };
 }
 
@@ -297,7 +347,15 @@ function detectJobPage() {
     const hasApply = !!document.querySelector(
       "button, a[href*='apply'], [data-automation-id='applyNowButton'], [data-test='apply']"
     );
-    return hasDescription || hasApply;
+    if (host.includes("monster.")) {
+      const monsterTitle = !!document.querySelector("h1, [data-testid='job-title']");
+      if ((hasDescription || hasApply) && monsterTitle) return true;
+      const listData = extractFromListView();
+      return !!listData.title;
+    }
+    if (hasDescription || hasApply) return true;
+    const listData = extractFromListView();
+    return !!listData.title;
   }
 
   const text = document.body ? document.body.innerText.toLowerCase() : "";
@@ -310,17 +368,29 @@ function detectJobPage() {
   ];
   const signalHit = signals.some((s) => text.includes(s));
   const description = extractDescription();
-  return signalHit && description.length > 120;
+  if (signalHit && description.length > 120) return true;
+  const listData = extractFromListView();
+  return !!listData.title;
 }
 
 function extractPayload() {
   const specific = extractSiteSpecific();
-  return {
+  const base = {
     title: specific.title || extractTitle(),
     company: specific.company || extractCompany(),
     location: specific.location || extractLocation(),
     description: specific.description || extractDescription()
   };
+  const listData = extractFromListView();
+  if (listData && listData.title) {
+    return {
+      title: listData.title || base.title,
+      company: listData.company || base.company,
+      location: listData.location || base.location,
+      description: listData.description || base.description
+    };
+  }
+  return base;
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
