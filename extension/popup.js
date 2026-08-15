@@ -255,7 +255,12 @@ function isListPageUrl(urlValue) {
   try {
     const u = new URL(urlValue);
     const path = u.pathname.toLowerCase();
-    return path.includes("/jobs/q-") || path.includes("/jobs/search") || (path.includes("/jobs/") && u.search.includes("q="));
+    const search = u.search.toLowerCase();
+    if (path === "/jobs" || path === "/jobs/") return true;
+    if (path.includes("/jobs/q-") || path.includes("/jobs/search")) return true;
+    if (path.includes("/jobs/collections")) return true;
+    if (path.includes("/jobs/") && (search.includes("q=") || search.includes("keywords="))) return true;
+    return false;
   } catch {
     return false;
   }

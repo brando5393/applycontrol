@@ -285,18 +285,19 @@ function renderList() {
   for (const app of apps) {
     const row = document.createElement("div");
     row.className = "row-item";
+    const safeId = escapeHtml(app.id);
     row.innerHTML = `
       <div class="role">
-        <div class="role-title">${app.title}</div>
-        <div class="meta">${app.company || "Unknown company"}</div>
-        ${app.location ? `<div class="badge">${app.location}</div>` : ""}
+        <div class="role-title">${escapeHtml(app.title)}</div>
+        <div class="meta">${escapeHtml(app.company) || "Unknown company"}</div>
+        ${app.location ? `<div class="badge">${escapeHtml(app.location)}</div>` : ""}
       </div>
-      <div class="meta">${app.source || "unknown"}</div>
+      <div class="meta">${escapeHtml(app.source) || "unknown"}</div>
       <div class="meta">${
-        app.captured_at ? app.captured_at.toLocaleString() : "n/a"
+        app.captured_at ? escapeHtml(app.captured_at.toLocaleString()) : "n/a"
       }</div>
       <div>
-        <select data-id="${app.id}">
+        <select data-id="${safeId}">
           <option value="applied">applied</option>
           <option value="callback">callback</option>
           <option value="interview">interview</option>
@@ -305,10 +306,10 @@ function renderList() {
         </select>
       </div>
       <div>
-        <a href="${app.url}" target="_blank" rel="noreferrer">Open</a>
+        <a href="${safeHref(app.url)}" target="_blank" rel="noreferrer">Open</a>
       </div>
       <div>
-        <button class="button secondary tiny" data-desc="${app.id}">
+        <button class="button secondary tiny" data-desc="${safeId}">
           <span class="material-symbols-outlined icon">subject</span>
           View
         </button>
@@ -316,7 +317,7 @@ function renderList() {
       <div>
         <button
           class="button alert tiny"
-          data-delete-id="${app.id}"
+          data-delete-id="${safeId}"
           title="Delete item. This action cannot be undone."
         >
           <span class="material-symbols-outlined icon">delete</span>
@@ -354,6 +355,25 @@ function renderList() {
       }
     });
   });
+}
+
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeHref(url) {
+  try {
+    const parsed = new URL(url, window.location.href);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "#";
+    return escapeHtml(parsed.toString());
+  } catch {
+    return "#";
+  }
 }
 
 function sanitizeText(value, { preserveLineBreaks = true } = {}) {

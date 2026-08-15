@@ -25,12 +25,15 @@ Format is optimized for AI agents.
 - [x] Sanitization before saving to Firestore (trim, collapse blank lines).
 - [x] Site detection + extraction for multiple boards; list-view fallback for Monster/Indeed.
 - [x] Prevent duplicates (fingerprint + URL/title/company checks).
+- [x] Fix Monster/Indeed list-page duplicate detection: per-card `job_id`/URL extraction (`content.js`), duplicate check now matches on `job_id` first; `isListPageUrl()` extended to cover Indeed's bare `/jobs` path, LinkedIn's `/jobs/search` and `/jobs/collections`, and generic `?keywords=` search pages.
+- [x] Escape all scraped job fields before rendering (`escapeHtml()`/`safeHref()` in `extension/dashboard.js`) â€” closes a stored-XSS gap where a crafted page could inject markup into the options-page DOM via a saved application's title/company/location/url.
+- [x] Retired the static `dashboard/` site: it had drifted onto the old Firebase-SDK auth path and was missing account deletion, feedback, per-item delete, and clear-all. The extension's options page (`extension/dashboard.js`) is now the only dashboard.
 
 ## Pending / Next
-- [ ] Fix Monster list-page duplicate detection: ensure per-card URL/title/company extraction; avoid treating list URL as unique.
-- [ ] Validate Indeed list-page capture (per-card selection, proper title/URL).
+- [ ] Live-test list-page capture on real Indeed and Monster search-results pages (load unpacked extension, confirm correct per-card title/company/URL and no duplicate saves) â€” the fix above is unverified against live markup.
+- [ ] Extend list-page URL detection to Glassdoor and ZipRecruiter once their real search-results URL shape is confirmed (their URLs don't follow the `/jobs/` convention the other boards use, so they were left out of `isListPageUrl()` rather than guessed at).
 - [ ] Confirm dashboard shows records reliably across sign-in state changes.
-- [ ] Add “success” toast after delete-account and clear-all actions (auto-close).
+- [ ] Add ï¿½successï¿½ toast after delete-account and clear-all actions (auto-close).
 - [ ] Ensure logout/login state is synced between popup and dashboard consistently.
 - [ ] Add export (CSV/JSON) from dashboard.
 - [ ] Add onboarding / first-run guide in popup.
@@ -43,5 +46,6 @@ Format is optimized for AI agents.
 - [!] Should we prompt user to select a card when on list pages?
 
 ## Notes
-- Keep Firebase config out of repo; templates live in `extension/config.example.js` and `dashboard/config.example.js`.
+- Keep Firebase config out of repo; template lives in `extension/config.example.js`.
 - Firestore rules are documented in `README.md`.
+- No automated tests, CI, or npm project exist yet (`package-lock.json` is an empty stub with no `package.json`). Not addressed in this pass â€” flagged for a later hygiene pass.

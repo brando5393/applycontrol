@@ -3,11 +3,10 @@
 Stupid-simple job application tracker MVP:
 - Browser extension (Chrome/Edge/Firefox) for one-click capture
 - Firebase Auth + Firestore for cross-device sync
-- Web dashboard for viewing/editing status
+- Dashboard (extension options page) for viewing/editing status
 
 ## Structure
-- `extension/` - MV3 browser extension
-- `dashboard/` - Static web dashboard
+- `extension/` - MV3 browser extension, including the dashboard (options page)
 
 ## Firebase Setup
 1. Create a Firebase project.
@@ -35,9 +34,8 @@ service cloud.firestore {
 ```
 
 ## Configure
-Copy and fill in config files:
+Copy and fill in the config file:
 - `extension/config.js` from `extension/config.example.js`
-- `dashboard/config.js` from `dashboard/config.example.js`
 
 ## Privacy Policy
 See `PRIVACY_POLICY.md`.
@@ -58,9 +56,6 @@ macOS/Linux (bash):
 ```
 ./scripts/setup.sh
 ```
-
-## Run Dashboard (static)
-Serve `dashboard/` with any static server.
 
 ## Load Extension
 1. Chrome/Edge: `chrome://extensions` → Developer mode → Load unpacked → select `extension/`
