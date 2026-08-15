@@ -67,9 +67,15 @@ function extractTitle() {
 
 function findActiveCard() {
   const active = document.querySelector(
-    "[aria-selected='true'], .selected, .active, .is-active, .job-selected"
+    "[aria-selected='true'], [aria-current='true'], [data-selected='true'], [data-current='true'], .selected, .active, .is-active, .job-selected"
   );
   if (active) return active;
+  if (document.activeElement) {
+    const focusedCard = document.activeElement.closest(
+      "[data-testid*='jobcard'], [data-testid*='job-card'], .job-card, .jobCard, .tapItem, .result, .card"
+    );
+    if (focusedCard) return focusedCard;
+  }
   const cards = document.querySelectorAll(
     "[data-testid*='jobcard'], [data-testid*='job-card'], .job-card, .jobCard, .tapItem, .result, .card"
   );
@@ -82,7 +88,64 @@ function extractFromCard(card) {
     const el = card.querySelector(sel);
     return el && el.textContent ? el.textContent.trim() : "";
   };
+  const getCardId = () => {
+    const attrKeys = [
+      "data-jk",
+      "data-jobkey",
+      "data-jobid",
+      "data-job-id",
+      "data-id",
+      "data-entity-urn",
+      "data-entity-id"
+    ];
+    for (const key of attrKeys) {
+      const raw = card.getAttribute(key);
+      if (raw) return raw.trim();
+    }
+    return "";
+  };
+  const getCardUrl = () => {
+    const linkSelectors = [
+      "a[href*='jk=']",
+      "a[href*='/job/']",
+      "a[href*='jobs/view']",
+      "a[href*='jobid']",
+      "a[data-testid*='job']",
+      "a[href]"
+    ];
+    for (const sel of linkSelectors) {
+      const link = card.querySelector(sel);
+      if (!link) continue;
+      const href = link.getAttribute("href") || "";
+      if (!href || href === "#") continue;
+      try {
+        return new URL(href, window.location.href).toString();
+      } catch {
+        continue;
+      }
+    }
+    return "";
+  };
+  const getUrlJobId = (url) => {
+    if (!url) return "";
+    try {
+      const u = new URL(url);
+      return (
+        u.searchParams.get("jk") ||
+        u.searchParams.get("jobId") ||
+        u.searchParams.get("jobid") ||
+        u.searchParams.get("jobKey") ||
+        ""
+      );
+    } catch {
+      return "";
+    }
+  };
+  const cardUrl = getCardUrl();
+  const cardId = getCardId() || getUrlJobId(cardUrl);
   return {
+    url: cardUrl,
+    job_id: cardId,
     title:
       getCardText("[data-testid*='job-title']") ||
       getCardText(".jobTitle") ||
@@ -382,15 +445,20 @@ function extractPayload() {
     description: specific.description || extractDescription()
   };
   const listData = extractFromListView();
+  const merged = { ...base };
+  if (listData && listData.url) merged.url = listData.url;
+  if (listData && listData.job_id) merged.job_id = listData.job_id;
+  if (listData && listData.title) merged.from_list = true;
   if (listData && listData.title) {
-    return {
-      title: listData.title || base.title,
-      company: listData.company || base.company,
-      location: listData.location || base.location,
-      description: listData.description || base.description
-    };
+    const baseTitle = base.title || "";
+    const useListTitle =
+      !baseTitle || baseTitle === document.title || base.description.length < 40;
+    if (useListTitle) merged.title = listData.title;
   }
-  return base;
+  if (!merged.company && listData && listData.company) merged.company = listData.company;
+  if (!merged.location && listData && listData.location) merged.location = listData.location;
+  if (listData && listData.description) merged.description = listData.description;
+  return merged;
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

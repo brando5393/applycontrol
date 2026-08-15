@@ -174,6 +174,7 @@ async function saveApplication(auth, payload) {
     fields.description = { stringValue: payload.description };
   if (payload.fingerprint)
     fields.fingerprint = { stringValue: payload.fingerprint };
+  if (payload.job_id) fields.job_id = { stringValue: payload.job_id };
 
   const res = await fetch(url, {
     method: "POST",
@@ -220,7 +221,8 @@ async function getExistingApplications(auth) {
       url: doc.fields.url ? doc.fields.url.stringValue || "" : "",
       title: doc.fields.title ? doc.fields.title.stringValue || "" : "",
       fingerprint: doc.fields.fingerprint ? doc.fields.fingerprint.stringValue || "" : "",
-      company: doc.fields.company ? doc.fields.company.stringValue || "" : ""
+      company: doc.fields.company ? doc.fields.company.stringValue || "" : "",
+      job_id: doc.fields.job_id ? doc.fields.job_id.stringValue || "" : ""
     });
   }
   return out;
@@ -228,6 +230,9 @@ async function getExistingApplications(auth) {
 
 function isDuplicate(existing, candidate) {
   if (!existing || !candidate) return false;
+  const sameJobId =
+    existing.job_id && candidate.job_id &&
+    existing.job_id === candidate.job_id;
   const sameFingerprint =
     existing.fingerprint && candidate.fingerprint &&
     existing.fingerprint === candidate.fingerprint;
@@ -239,7 +244,7 @@ function isDuplicate(existing, candidate) {
     candidate.title &&
     existing.title === candidate.title &&
     (existing.company || "") === (candidate.company || "");
-  return sameFingerprint || sameUrlTitleCompany;
+  return sameJobId || sameFingerprint || sameUrlTitleCompany;
 }
 
 function hasDuplicate(existingList, candidate) {
@@ -510,7 +515,6 @@ el.capture.addEventListener("click", async () => {
       return;
     }
     const url = new URL(tab.url);
-    const normalizedUrl = normalizeUrl(tab.url);
     let extracted = {};
     try {
       extracted = await new Promise((resolve) => {
@@ -529,27 +533,40 @@ el.capture.addEventListener("click", async () => {
     } catch {
       extracted = {};
     }
+    const candidateUrlRaw = extracted.url || tab.url;
+    const normalizedUrl = normalizeUrl(candidateUrlRaw);
+    let sourceHost = url.hostname;
+    try {
+      sourceHost = new URL(candidateUrlRaw).hostname || sourceHost;
+    } catch {
+      sourceHost = url.hostname;
+    }
     const candidateTitle = sanitizeText(extracted.title || tab.title || tab.url, { preserveLineBreaks: false });
     const candidateCompany = sanitizeText(extracted.company || "", { preserveLineBreaks: false });
     const candidateLocation = sanitizeText(extracted.location || "", { preserveLineBreaks: false });
     const candidateDescription = sanitizeText(extracted.description || "", { preserveLineBreaks: true });
+    const candidateJobId = sanitizeText(extracted.job_id || "", { preserveLineBreaks: false });
+    const fromList = !!extracted.from_list;
     const fingerprint = makeFingerprint({
       title: candidateTitle,
       company: candidateCompany,
       location: candidateLocation,
-      source: url.hostname,
+      source: sourceHost,
       description: candidateDescription
     });
-    const usableFingerprint = candidateDescription && candidateDescription.length >= 40
-      ? fingerprint
-      : "";
+    const useFingerprint =
+      !!candidateDescription &&
+      candidateDescription.length >= 40 &&
+      (!fromList || candidateDescription.length <= 500);
+    const usableFingerprint = useFingerprint ? fingerprint : "";
     const existing = await getExistingApplications(auth);
-    const ignoreUrl = url.hostname.includes("monster.") && isListPageUrl(normalizedUrl);
+    const ignoreUrl = isListPageUrl(normalizedUrl) && !extracted.url;
     if (hasDuplicate(existing, {
       url: ignoreUrl ? "" : normalizedUrl,
       title: candidateTitle,
       fingerprint: usableFingerprint,
-      company: candidateCompany
+      company: candidateCompany,
+      job_id: candidateJobId
     })) {
       setStatus("Already saved.", true);
       return;
@@ -561,8 +578,9 @@ el.capture.addEventListener("click", async () => {
       company: candidateCompany,
       location: candidateLocation,
       description: candidateDescription,
-      source: url.hostname,
-      fingerprint: usableFingerprint
+      source: sourceHost,
+      fingerprint: usableFingerprint,
+      job_id: candidateJobId
     });
     setStatus("Saved.");
   } catch (err) {
