@@ -65,9 +65,99 @@ function extractTitle() {
   );
 }
 
+function getCardId(card) {
+  const attrKeys = [
+    "data-jk",
+    "data-jobkey",
+    "data-jobid",
+    "data-job-id",
+    "data-id",
+    "data-entity-urn",
+    "data-entity-id"
+  ];
+  for (const key of attrKeys) {
+    const raw = card.getAttribute(key);
+    if (raw) return raw.trim();
+  }
+  // Indeed's homepage/recommendation cards don't put the job id in the
+  // link href at all (unlike its search-results cards) -- it's only in a
+  // "job_<hex>" class token.
+  const classMatch = (card.getAttribute("class") || "").match(/\bjob_([a-z0-9]+)\b/i);
+  if (classMatch) return classMatch[1];
+  return "";
+}
+
+function getCardUrl(card) {
+  const linkSelectors = [
+    "a[href*='jk=']",
+    "a[href*='/job/']",
+    "a[href*='jobs/view']",
+    "a[href*='jobid']",
+    "a[data-testid='jobTitle']",
+    "a[data-testid*='job']",
+    "a[href]"
+  ];
+  for (const sel of linkSelectors) {
+    const link = card.querySelector(sel);
+    if (!link) continue;
+    const href = link.getAttribute("href") || "";
+    if (!href || href === "#") continue;
+    try {
+      return new URL(href, window.location.href).toString();
+    } catch {
+      continue;
+    }
+  }
+  return "";
+}
+
+function getUrlJobId(url) {
+  if (!url) return "";
+  try {
+    const u = new URL(url);
+    const monsterMatch = u.pathname.match(
+      /--([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
+    );
+    if (monsterMatch) return monsterMatch[1];
+    return (
+      u.searchParams.get("jk") ||
+      u.searchParams.get("jobId") ||
+      u.searchParams.get("jobid") ||
+      u.searchParams.get("jobKey") ||
+      ""
+    );
+  } catch {
+    return "";
+  }
+}
+
+function resolveCardId(card) {
+  return getCardId(card) || getUrlJobId(getCardUrl(card));
+}
+
 function findActiveCard() {
   const cardSelector =
     "[data-testid*='jobcard'], [data-testid*='job-card'], [data-testid='JobCard'], .job-card, .jobCard, .tapItem, .result, .card";
+
+  // The page's own "which job is open" URL param (Indeed's `vjk`) is more
+  // trustworthy than any selection/highlight class below: over a long
+  // browsing session (many cards clicked across Indeed's search-results and
+  // homepage/recommendations layouts without a full reload), Indeed's own
+  // client can leave stale highlight markers on cards that are no longer
+  // the one actually open, and multiple can coexist at once.
+  let currentJobId = "";
+  try {
+    currentJobId = new URL(window.location.href).searchParams.get("vjk") || "";
+  } catch {
+    currentJobId = "";
+  }
+  if (currentJobId) {
+    const candidates = document.querySelectorAll(cardSelector);
+    for (const candidate of candidates) {
+      if (resolveCardId(candidate) === currentJobId) return candidate;
+    }
+  }
+
   // Class-based selection markers are checked before generic ARIA/data
   // attributes: on some sites (e.g. Monster) an unrelated control inside a
   // card (a save/quick-apply button) carries aria-selected="true" at all
@@ -96,66 +186,8 @@ function extractFromCard(card) {
     const el = card.querySelector(sel);
     return el && el.textContent ? el.textContent.trim() : "";
   };
-  const getCardId = () => {
-    const attrKeys = [
-      "data-jk",
-      "data-jobkey",
-      "data-jobid",
-      "data-job-id",
-      "data-id",
-      "data-entity-urn",
-      "data-entity-id"
-    ];
-    for (const key of attrKeys) {
-      const raw = card.getAttribute(key);
-      if (raw) return raw.trim();
-    }
-    return "";
-  };
-  const getCardUrl = () => {
-    const linkSelectors = [
-      "a[href*='jk=']",
-      "a[href*='/job/']",
-      "a[href*='jobs/view']",
-      "a[href*='jobid']",
-      "a[data-testid='jobTitle']",
-      "a[data-testid*='job']",
-      "a[href]"
-    ];
-    for (const sel of linkSelectors) {
-      const link = card.querySelector(sel);
-      if (!link) continue;
-      const href = link.getAttribute("href") || "";
-      if (!href || href === "#") continue;
-      try {
-        return new URL(href, window.location.href).toString();
-      } catch {
-        continue;
-      }
-    }
-    return "";
-  };
-  const getUrlJobId = (url) => {
-    if (!url) return "";
-    try {
-      const u = new URL(url);
-      const monsterMatch = u.pathname.match(
-        /--([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
-      );
-      if (monsterMatch) return monsterMatch[1];
-      return (
-        u.searchParams.get("jk") ||
-        u.searchParams.get("jobId") ||
-        u.searchParams.get("jobid") ||
-        u.searchParams.get("jobKey") ||
-        ""
-      );
-    } catch {
-      return "";
-    }
-  };
-  const cardUrl = getCardUrl();
-  const cardId = getCardId() || getUrlJobId(cardUrl);
+  const cardUrl = getCardUrl(card);
+  const cardId = getCardId(card) || getUrlJobId(cardUrl);
   return {
     url: cardUrl,
     job_id: cardId,
