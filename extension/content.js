@@ -66,19 +66,27 @@ function extractTitle() {
 }
 
 function findActiveCard() {
-  const active = document.querySelector(
-    "[aria-selected='true'], [aria-current='true'], [data-selected='true'], [data-current='true'], .selected, .active, .is-active, .job-selected"
-  );
-  if (active) return active;
+  const cardSelector =
+    "[data-testid*='jobcard'], [data-testid*='job-card'], [data-testid='JobCard'], .job-card, .jobCard, .tapItem, .result, .card";
+  // Class-based selection markers are checked before generic ARIA/data
+  // attributes: on some sites (e.g. Monster) an unrelated control inside a
+  // card (a save/quick-apply button) carries aria-selected="true" at all
+  // times, which would otherwise be mistaken for "the viewed job".
+  const activeSelectorGroups = [
+    ".selected, .active, .is-active, .job-selected, .card-selected",
+    "[aria-selected='true'], [aria-current='true'], [data-selected='true'], [data-current='true']"
+  ];
+  for (const group of activeSelectorGroups) {
+    const active = document.querySelector(group);
+    if (!active) continue;
+    const activeCard = active.closest(cardSelector);
+    if (activeCard) return activeCard;
+  }
   if (document.activeElement) {
-    const focusedCard = document.activeElement.closest(
-      "[data-testid*='jobcard'], [data-testid*='job-card'], .job-card, .jobCard, .tapItem, .result, .card"
-    );
+    const focusedCard = document.activeElement.closest(cardSelector);
     if (focusedCard) return focusedCard;
   }
-  const cards = document.querySelectorAll(
-    "[data-testid*='jobcard'], [data-testid*='job-card'], .job-card, .jobCard, .tapItem, .result, .card"
-  );
+  const cards = document.querySelectorAll(cardSelector);
   return cards && cards[0] ? cards[0] : null;
 }
 
@@ -110,6 +118,7 @@ function extractFromCard(card) {
       "a[href*='/job/']",
       "a[href*='jobs/view']",
       "a[href*='jobid']",
+      "a[data-testid='jobTitle']",
       "a[data-testid*='job']",
       "a[href]"
     ];
@@ -130,6 +139,10 @@ function extractFromCard(card) {
     if (!url) return "";
     try {
       const u = new URL(url);
+      const monsterMatch = u.pathname.match(
+        /--([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
+      );
+      if (monsterMatch) return monsterMatch[1];
       return (
         u.searchParams.get("jk") ||
         u.searchParams.get("jobId") ||
@@ -147,17 +160,20 @@ function extractFromCard(card) {
     url: cardUrl,
     job_id: cardId,
     title:
+      getCardText("[data-testid='jobTitle']") ||
       getCardText("[data-testid*='job-title']") ||
       getCardText(".jobTitle") ||
       getCardText("h2") ||
       getCardText("h3") ||
       getCardText("a"),
     company:
+      getCardText("[data-testid='company']") ||
       getCardText("[data-testid*='company']") ||
       getCardText(".company") ||
       getCardText(".companyName") ||
       getCardText("[class*='company']"),
     location:
+      getCardText("[data-testid='jobDetailLocation']") ||
       getCardText("[data-testid*='location']") ||
       getCardText(".location") ||
       getCardText("[class*='location']"),
@@ -451,12 +467,23 @@ function extractPayload() {
   if (listData && listData.title) merged.from_list = true;
   if (listData && listData.title) {
     const baseTitle = base.title || "";
+    // On Monster's search-results page the generic <main>/<article> text
+    // fallback in extractDescription() is long enough to look like a real
+    // job description, so the length check below never distinguishes list
+    // pages from detail pages there. specific.description (the Monster
+    // extractor's own selectors) is empty unless a real job detail element
+    // is present, so treat that as list-page confirmation instead.
+    const isMonsterListPage =
+      window.location.hostname.includes("monster.") && !specific.description;
     const useListTitle =
-      !baseTitle || baseTitle === document.title || base.description.length < 40;
+      !baseTitle ||
+      baseTitle === document.title ||
+      base.description.length < 40 ||
+      isMonsterListPage;
     if (useListTitle) merged.title = listData.title;
+    if (listData.company) merged.company = listData.company;
+    if (listData.location) merged.location = listData.location;
   }
-  if (!merged.company && listData && listData.company) merged.company = listData.company;
-  if (!merged.location && listData && listData.location) merged.location = listData.location;
   if (listData && listData.description) merged.description = listData.description;
   return merged;
 }
