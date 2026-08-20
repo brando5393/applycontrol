@@ -30,10 +30,12 @@ ApplyControl is a browser-extension-first job application tracker.
 - Load extension:
   - Chrome/Edge: `chrome://extensions` ? Developer mode ? Load unpacked ? select `extension/`
   - Firefox: `about:debugging#/runtime/this-firefox` ? Load Temporary Add-on ? select `extension/manifest.json`
+- Run tests: `npm install && npm test` (see `RELEASING.md` for the version-bump process)
 
 ## Code Conventions
 - Keep user data sanitization in the capture path before saving to Firestore.
-- `sanitizeText()` only normalizes whitespace/control characters — it is not HTML-safe. Any job data rendered into the dashboard DOM must go through `escapeHtml()` (and `safeHref()` for URLs) in `extension/dashboard.js`; never assign scraped fields into `innerHTML` unescaped.
+- `sanitizeText()` (in `extension/lib/shared.js`, loaded before `popup.js`/`content.js`/`dashboard.js`) only normalizes whitespace/control characters — it is not HTML-safe. Any job data rendered into the dashboard DOM must go through `escapeHtml()` (and `safeHref()` for URLs) in `extension/dashboard.js`; never assign scraped fields into `innerHTML` unescaped.
+- Pure logic with no DOM/`chrome.*` dependency belongs in `extension/lib/shared.js`, not duplicated across `popup.js`/`content.js`/`dashboard.js` — it's the only part of the extension covered by `npm test`.
 - Preserve accessibility attributes in UI updates (modal roles, focus handling, aria-live where used).
 - Avoid committing secrets or runtime-generated files (verify `.gitignore`).
 

@@ -18,6 +18,9 @@ const el = {
   syncStatus: document.getElementById("sync-status"),
   refresh: document.getElementById("refresh"),
   clearAll: document.getElementById("clear-all"),
+  exportCsv: document.getElementById("export-csv"),
+  exportJson: document.getElementById("export-json"),
+  toast: document.getElementById("toast"),
   feedbackToggle: document.getElementById("feedback-toggle"),
   accountMenu: document.getElementById("account-menu"),
   accountToggle: document.getElementById("account-toggle"),
@@ -38,6 +41,7 @@ const el = {
   descriptionModal: document.getElementById("description-modal"),
   descriptionContent: document.getElementById("description-content"),
   descriptionClose: document.getElementById("description-close"),
+  historyList: document.getElementById("history-list"),
   modal: document.getElementById("modal"),
   modalCancel: document.getElementById("modal-cancel"),
   modalConfirm: document.getElementById("modal-confirm"),
@@ -81,6 +85,18 @@ function setFeedbackStatus(message, isError = false) {
   if (!el.feedbackStatus) return;
   el.feedbackStatus.textContent = message || "";
   el.feedbackStatus.style.color = isError ? "#b00020" : "#2b7a2b";
+}
+
+let toastTimer = null;
+function showToast(message, isError = false) {
+  if (!el.toast) return;
+  el.toast.textContent = message || "";
+  el.toast.classList.toggle("error", isError);
+  el.toast.classList.remove("hidden");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.toast.classList.add("hidden");
+  }, 3000);
 }
 
 function requireConfig() {
@@ -238,6 +254,10 @@ function renderStatusFilters() {
   }
 }
 
+// parseStatusHistoryField / encodeStatusHistoryField live in lib/shared.js
+// (loaded before this file) so popup.js can seed the initial history entry
+// at capture time using the same wire format.
+
 function parseFirestoreDoc(doc) {
   const fields = doc.fields || {};
   return {
@@ -249,6 +269,7 @@ function parseFirestoreDoc(doc) {
     source: fields.source ? fields.source.stringValue || "" : "",
     status: fields.status ? fields.status.stringValue || "applied" : "applied",
     description: fields.description ? fields.description.stringValue || "" : "",
+    status_history: parseStatusHistoryField(fields.status_history),
     captured_at: fields.captured_at
       ? new Date(fields.captured_at.timestampValue)
       : null
@@ -339,7 +360,7 @@ function renderList() {
       const id = btn.getAttribute("data-desc");
       const app = cachedApps.find((a) => a.id === id);
       const text = app && app.description ? app.description : "No description saved.";
-      openDescriptionModal(text);
+      openDescriptionModal(text, app ? app.status_history : []);
     });
   });
 
@@ -376,20 +397,8 @@ function safeHref(url) {
   }
 }
 
-function sanitizeText(value, { preserveLineBreaks = true } = {}) {
-  if (value == null) return "";
-  let text = String(value);
-  text = text.replace(/\u0000/g, "");
-  text = text.replace(/\r\n/g, "\n");
-  text = text.replace(/[ \t]+\n/g, "\n");
-  text = text.replace(/\n{3,}/g, "\n\n");
-  text = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
-  text = text.trim();
-  if (!preserveLineBreaks) {
-    text = text.replace(/\s+/g, " ");
-  }
-  return text;
-}
+// sanitizeText lives in lib/shared.js (loaded before this file) so it
+// can be unit-tested without any DOM/chrome stubbing.
 
 async function fetchApplications(auth) {
   if (isFetching) return;
@@ -447,8 +456,11 @@ async function fetchApplications(auth) {
 async function updateStatus(docId, status) {
   const auth = await getValidAuth();
   if (!auth) return;
-  const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents/applications/${docId}?updateMask.fieldPaths=status`;
-  await fetch(url, {
+  const app = cachedApps.find((a) => a.id === docId);
+  const changedAt = new Date().toISOString();
+  const history = appendStatusHistory(app ? app.status_history : [], status, changedAt);
+  const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents/applications/${docId}?updateMask.fieldPaths=status&updateMask.fieldPaths=status_history`;
+  const res = await fetch(url, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -456,10 +468,15 @@ async function updateStatus(docId, status) {
     },
     body: JSON.stringify({
       fields: {
-        status: { stringValue: status }
+        status: { stringValue: status },
+        status_history: encodeStatusHistoryField(history)
       }
     })
   });
+  if (res.ok && app) {
+    app.status = status;
+    app.status_history = history;
+  }
 }
 
 async function deleteOneApplication(docId) {
@@ -479,6 +496,7 @@ async function deleteOneApplication(docId) {
   cachedApps = cachedApps.filter((app) => app.id !== docId);
   renderList();
   if (el.syncStatus) el.syncStatus.textContent = "Application deleted.";
+  showToast("Application deleted.");
 }
 
 el.search.addEventListener("input", renderList);
@@ -486,6 +504,54 @@ el.refresh.addEventListener("click", async () => {
   const auth = await getValidAuth().catch(() => null);
   if (auth) await fetchApplications(auth);
 });
+
+function triggerDownload(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportApplications(format) {
+  if (!cachedApps.length) {
+    showToast("No applications to export.", true);
+    return;
+  }
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (format === "csv") {
+    triggerDownload(
+      `applycontrol-applications-${stamp}.csv`,
+      applicationsToCsv(cachedApps),
+      "text/csv"
+    );
+  } else {
+    const plain = cachedApps.map((app) => ({
+      title: app.title,
+      company: app.company,
+      location: app.location,
+      source: app.source,
+      status: app.status,
+      url: app.url,
+      captured_at: app.captured_at ? app.captured_at.toISOString() : null,
+      description: app.description,
+      status_history: app.status_history || []
+    }));
+    triggerDownload(
+      `applycontrol-applications-${stamp}.json`,
+      JSON.stringify(plain, null, 2),
+      "application/json"
+    );
+  }
+  showToast(`Exported ${cachedApps.length} application${cachedApps.length === 1 ? "" : "s"}.`);
+}
+
+if (el.exportCsv) el.exportCsv.addEventListener("click", () => exportApplications("csv"));
+if (el.exportJson) el.exportJson.addEventListener("click", () => exportApplications("json"));
 
 function openModal() {
   if (el.modal) {
@@ -625,10 +691,32 @@ function openFeedbackModal() {
   if (el.feedbackTitle) el.feedbackTitle.focus();
 }
 
-function openDescriptionModal(text) {
+function openDescriptionModal(text, history) {
   if (!el.descriptionModal || !el.descriptionContent) return;
   lastFocused = document.activeElement;
   el.descriptionContent.textContent = text || "";
+  if (el.historyList) {
+    el.historyList.innerHTML = "";
+    const entries = Array.isArray(history) ? history : [];
+    if (entries.length) {
+      for (const entry of entries) {
+        const li = document.createElement("li");
+        const statusSpan = document.createElement("span");
+        statusSpan.textContent = entry.status;
+        const dateSpan = document.createElement("span");
+        dateSpan.className = "meta";
+        dateSpan.textContent = entry.changed_at
+          ? new Date(entry.changed_at).toLocaleString()
+          : "";
+        li.appendChild(statusSpan);
+        li.appendChild(dateSpan);
+        el.historyList.appendChild(li);
+      }
+      el.historyList.classList.remove("hidden");
+    } else {
+      el.historyList.classList.add("hidden");
+    }
+  }
   el.descriptionModal.classList.remove("hidden");
   if (el.descriptionClose) el.descriptionClose.focus();
 }
@@ -637,6 +725,10 @@ function closeDescriptionModal() {
   if (!el.descriptionModal) return;
   el.descriptionModal.classList.add("hidden");
   if (el.descriptionContent) el.descriptionContent.textContent = "";
+  if (el.historyList) {
+    el.historyList.innerHTML = "";
+    el.historyList.classList.add("hidden");
+  }
   if (lastFocused && typeof lastFocused.focus === "function") {
     lastFocused.focus();
   }
@@ -750,6 +842,7 @@ async function clearAllApplications() {
     cachedApps = [];
     renderList();
     if (el.syncStatus) el.syncStatus.textContent = "No applications to delete.";
+    showToast("No applications to delete.");
     return;
   }
 
@@ -769,6 +862,7 @@ async function clearAllApplications() {
   cachedApps = [];
   renderList();
   if (el.syncStatus) el.syncStatus.textContent = "All applications deleted.";
+  showToast("All applications deleted.");
 }
 
 el.signUp.addEventListener("click", async () => {
@@ -830,6 +924,7 @@ if (el.modalConfirm) {
       await clearAllApplications();
     } catch (err) {
       if (el.syncStatus) el.syncStatus.textContent = `Delete error: ${err.message}`;
+      showToast(`Delete error: ${err.message}`, true);
     }
   });
 }
@@ -875,6 +970,7 @@ if (el.deleteConfirm) el.deleteConfirm.addEventListener("click", async () => {
     closeDeleteModal();
     updateUI(null);
     setAuthStatus("Account deleted.");
+    showToast("Account and all data deleted.");
     openDeleteSuccessModal();
   } catch (err) {
     setDeleteStatus(err.message || "Delete failed.", true);

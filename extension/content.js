@@ -111,25 +111,8 @@ function getCardUrl(card) {
   return "";
 }
 
-function getUrlJobId(url) {
-  if (!url) return "";
-  try {
-    const u = new URL(url);
-    const monsterMatch = u.pathname.match(
-      /--([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
-    );
-    if (monsterMatch) return monsterMatch[1];
-    return (
-      u.searchParams.get("jk") ||
-      u.searchParams.get("jobId") ||
-      u.searchParams.get("jobid") ||
-      u.searchParams.get("jobKey") ||
-      ""
-    );
-  } catch {
-    return "";
-  }
-}
+// getUrlJobId lives in lib/shared.js (loaded before this file, see
+// manifest.json's content_scripts) so it can be unit-tested directly.
 
 function resolveCardId(card) {
   return getCardId(card) || getUrlJobId(getCardUrl(card));
@@ -527,29 +510,51 @@ function extractPayload() {
   return merged;
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg && msg.type === "APPLYCONTROL_EXTRACT") {
-    try {
-      const payload = extractPayload();
-      sendResponse({ ok: true, payload });
-    } catch (err) {
-      sendResponse({ ok: false, error: err.message });
+// Guarded (rather than called unconditionally at module scope) so this file
+// can be require()'d from the test suite without a chrome.* stub -- there's
+// no test-only branch here, just a defensive check of something the browser
+// always provides but Node never does.
+if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg && msg.type === "APPLYCONTROL_EXTRACT") {
+      try {
+        const payload = extractPayload();
+        sendResponse({ ok: true, payload });
+      } catch (err) {
+        sendResponse({ ok: false, error: err.message });
+      }
     }
-  }
-  if (msg && msg.type === "APPLYCONTROL_IS_JOB_PAGE") {
-    try {
-      sendResponse({ ok: true, isJobPage: detectJobPage() });
-    } catch (err) {
-      sendResponse({ ok: false, error: err.message });
+    if (msg && msg.type === "APPLYCONTROL_IS_JOB_PAGE") {
+      try {
+        sendResponse({ ok: true, isJobPage: detectJobPage() });
+      } catch (err) {
+        sendResponse({ ok: false, error: err.message });
+      }
     }
-  }
-});
-
-try {
-  chrome.runtime.sendMessage({
-    type: "APPLYCONTROL_JOB_PAGE_STATUS",
-    isJobPage: detectJobPage()
   });
-} catch {
-  // Ignore on restricted pages.
+
+  try {
+    chrome.runtime.sendMessage({
+      type: "APPLYCONTROL_JOB_PAGE_STATUS",
+      isJobPage: detectJobPage()
+    });
+  } catch {
+    // Ignore on restricted pages.
+  }
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    getCardId,
+    getCardUrl,
+    resolveCardId,
+    findActiveCard,
+    extractFromCard,
+    extractFromListView,
+    extractSiteSpecific,
+    detectJobPage,
+    extractPayload,
+    extractIndeed,
+    extractMonster
+  };
 }

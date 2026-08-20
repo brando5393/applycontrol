@@ -92,6 +92,14 @@
               <span class="material-symbols-outlined icon">refresh</span>
               Refresh
             </button>
+            <button id="export-csv" class="button secondary">
+              <span class="material-symbols-outlined icon">download</span>
+              Export CSV
+            </button>
+            <button id="export-json" class="button secondary">
+              <span class="material-symbols-outlined icon">download</span>
+              Export JSON
+            </button>
             <button id="feedback-toggle" class="button secondary">
               <span class="material-symbols-outlined icon">feedback</span>
               Feedback
@@ -193,13 +201,17 @@
       <div class="modal-card" tabindex="-1">
         <h3 id="description-title">Job Description</h3>
         <div id="description-content" class="description-content"></div>
+        <ul id="history-list" class="history-list hidden"></ul>
         <div class="row end">
           <button id="description-close" class="button secondary">Close</button>
         </div>
       </div>
     </div>
 
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
     <script src="config.js"></script>
+    <script src="lib/shared.js"></script>
     <script src="dashboard.js"></script>
   </body>
 </html>

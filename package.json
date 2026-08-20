@@ -1,0 +1,12 @@
+{
+  "name": "applycontrol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test suite and dev tooling for the ApplyControl browser extension.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1"
+  }
+}

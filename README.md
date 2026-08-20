@@ -5,8 +5,33 @@ Stupid-simple job application tracker MVP:
 - Firebase Auth + Firestore for cross-device sync
 - Dashboard (extension options page) for viewing/editing status
 
+## Supported Job Boards
+`extension/content.js` has a site-specific extractor (title/company/location/description, plus per-card extraction on search-results/list pages where applicable) for:
+- Indeed
+- Monster
+- LinkedIn
+- Workday
+- Ashby
+- SmartRecruiters
+- Wellfound (AngelList)
+- ZipRecruiter
+- Glassdoor
+- Greenhouse
+- Lever
+
+Any other site falls back to generic extraction (page `<h1>`, Open Graph/Twitter meta tags, and common `company`/`location` class-name heuristics) — capture still works there, just less precisely.
+
 ## Structure
 - `extension/` - MV3 browser extension, including the dashboard (options page)
+- `extension/lib/shared.js` - pure logic (duplicate detection, URL/id parsing, text sanitization) shared by the popup, content script, and dashboard
+- `test/` - unit and DOM regression tests (`npm test`)
+
+## Tests
+```
+npm install
+npm test
+```
+Runs on every push/PR to `main` via `.github/workflows/test.yml`. See `RELEASING.md` for how version bumps work.
 
 ## Firebase Setup
 1. Create a Firebase project.

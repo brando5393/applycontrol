@@ -27,6 +27,7 @@ const el = {
 
 const STORAGE_KEY = "applycontrol_auth";
 const REMEMBER_KEY = "applycontrol_remember";
+const ONBOARDED_KEY = "applycontrol_onboarded";
 
 function setStatus(message, isError = false) {
   el.status.textContent = message || "";
@@ -145,27 +146,39 @@ async function getValidAuth() {
   if (!auth) return null;
   const now = Date.now();
   if (auth.expiresAt && auth.expiresAt - now > 60 * 1000) return auth;
-  const refreshed = await refreshToken(auth.refreshToken);
-  const expiresAt = Date.now() + Number(refreshed.expires_in) * 1000;
-  const updated = {
-    ...auth,
-    idToken: refreshed.id_token,
-    refreshToken: refreshed.refresh_token,
-    expiresAt
-  };
-  const remember = await loadRemember();
-  await saveAuth(updated, remember);
-  return updated;
+  try {
+    const refreshed = await refreshToken(auth.refreshToken);
+    const expiresAt = Date.now() + Number(refreshed.expires_in) * 1000;
+    const updated = {
+      ...auth,
+      idToken: refreshed.id_token,
+      refreshToken: refreshed.refresh_token,
+      expiresAt,
+      stale: false
+    };
+    const remember = await loadRemember();
+    await saveAuth(updated, remember);
+    return updated;
+  } catch {
+    // Refresh token itself expired/revoked (e.g. password changed
+    // elsewhere, or the session simply aged out) -- distinct from "not
+    // signed in at all" so the UI can say why capture just stopped working.
+    return { ...auth, stale: true };
+  }
 }
 
 async function saveApplication(auth, payload) {
   const url = `https://firestore.googleapis.com/v1/projects/${config.firebaseProjectId}/databases/(default)/documents/applications`;
+  const capturedAt = new Date().toISOString();
   const fields = {
     user_id: { stringValue: auth.localId },
     url: { stringValue: payload.url },
     title: { stringValue: payload.title },
-    captured_at: { timestampValue: new Date().toISOString() },
+    captured_at: { timestampValue: capturedAt },
     status: { stringValue: "applied" },
+    status_history: encodeStatusHistoryField(
+      appendStatusHistory([], "applied", capturedAt)
+    ),
     source: { stringValue: payload.source }
   };
   if (payload.company) fields.company = { stringValue: payload.company };
@@ -228,75 +241,9 @@ async function getExistingApplications(auth) {
   return out;
 }
 
-function isDuplicate(existing, candidate) {
-  if (!existing || !candidate) return false;
-  const sameJobId =
-    existing.job_id && candidate.job_id &&
-    existing.job_id === candidate.job_id;
-  const sameFingerprint =
-    existing.fingerprint && candidate.fingerprint &&
-    existing.fingerprint === candidate.fingerprint;
-  const sameUrlTitleCompany =
-    existing.url &&
-    candidate.url &&
-    existing.url === candidate.url &&
-    existing.title &&
-    candidate.title &&
-    existing.title === candidate.title &&
-    (existing.company || "") === (candidate.company || "");
-  return sameJobId || sameFingerprint || sameUrlTitleCompany;
-}
-
-function hasDuplicate(existingList, candidate) {
-  return existingList.some((e) => isDuplicate(e, candidate));
-}
-
-function isListPageUrl(urlValue) {
-  try {
-    const u = new URL(urlValue);
-    const path = u.pathname.toLowerCase();
-    const search = u.search.toLowerCase();
-    if (path === "/jobs" || path === "/jobs/") return true;
-    if (path.includes("/jobs/q-") || path.includes("/jobs/search")) return true;
-    if (path.includes("/jobs/collections")) return true;
-    if (path.includes("/jobs/") && (search.includes("q=") || search.includes("keywords="))) return true;
-    return false;
-  } catch {
-    return false;
-  }
-}
-function normalizeUrl(raw) {
-  try {
-    const u = new URL(raw);
-    u.hash = "";
-    return u.toString();
-  } catch {
-    return raw;
-  }
-}
-
-function makeFingerprint({ title, company, location, source, description }) {
-  const descSnippet = (description || "").toLowerCase().trim().slice(0, 200);
-  const base = [title, company, location, source, descSnippet]
-    .map((v) => (v || "").toLowerCase().trim())
-    .join("|");
-  return base.replace(/\s+/g, " ");
-}
-
-function sanitizeText(value, { preserveLineBreaks = true } = {}) {
-  if (value == null) return "";
-  let text = String(value);
-  text = text.replace(/\u0000/g, "");
-  text = text.replace(/\r\n/g, "\n");
-  text = text.replace(/[ \t]+\n/g, "\n");
-  text = text.replace(/\n{3,}/g, "\n\n");
-  text = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
-  text = text.trim();
-  if (!preserveLineBreaks) {
-    text = text.replace(/\s+/g, " ");
-  }
-  return text;
-}
+// isDuplicate, hasDuplicate, isListPageUrl, normalizeUrl, makeFingerprint,
+// and sanitizeText live in lib/shared.js (loaded before this file) so they
+// can be unit-tested without any DOM/chrome stubbing.
 
 function getActiveTab() {
   return new Promise((resolve) => {
@@ -307,11 +254,14 @@ function getActiveTab() {
 }
 
 function updateUI(auth) {
-  const signedIn = !!auth;
+  const signedIn = !!auth && !auth.stale;
   el.authSection.classList.toggle("hidden", signedIn);
   el.appSection.classList.toggle("hidden", !signedIn);
   el.openDashboard.classList.toggle("hidden", !signedIn);
   el.userLabel.textContent = signedIn ? `Signed in: ${auth.email}` : "";
+  if (auth && auth.stale) {
+    setStatus("Session expired. Please sign in again.", true);
+  }
 }
 
 async function isJobPage(tabId) {
@@ -338,6 +288,7 @@ async function init() {
   if (el.version && chrome.runtime && chrome.runtime.getManifest) {
     el.version.textContent = chrome.runtime.getManifest().version || "n/a";
   }
+  await maybeShowOnboarding();
   const tab = await getActiveTab();
   if (tab && tab.id) {
     const ok = await isJobPage(tab.id);
@@ -411,6 +362,29 @@ el.openDashboard.addEventListener("click", () => {
   }
 });
 
+function isOnboarded() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([ONBOARDED_KEY], (result) => {
+      resolve(!!result[ONBOARDED_KEY]);
+    });
+  });
+}
+
+function markOnboarded() {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [ONBOARDED_KEY]: true }, resolve);
+  });
+}
+
+async function maybeShowOnboarding() {
+  if (!el.helpToggle || !el.helpPanel) return;
+  const onboarded = await isOnboarded();
+  if (onboarded) return;
+  el.helpPanel.classList.remove("hidden");
+  el.helpToggle.setAttribute("aria-expanded", "true");
+  await markOnboarded();
+}
+
 if (el.helpToggle && el.helpPanel) {
   el.helpToggle.addEventListener("click", () => {
     el.helpPanel.classList.toggle("hidden");
@@ -435,8 +409,14 @@ function closeFeedbackModal() {
 
 async function submitFeedback() {
   const auth = await getValidAuth().catch(() => null);
-  if (!auth) {
-    setFeedbackStatus("Please sign in first.", true);
+  if (!auth || auth.stale) {
+    setFeedbackStatus(
+      auth && auth.stale
+        ? "Session expired. Please sign in again."
+        : "Please sign in first.",
+      true
+    );
+    if (auth && auth.stale) updateUI(auth);
     return;
   }
   const title = sanitizeText(el.feedbackTitle && el.feedbackTitle.value || "", { preserveLineBreaks: false });
@@ -512,6 +492,10 @@ el.capture.addEventListener("click", async () => {
     if (!auth) {
       setStatus("Please sign in.", true);
       updateUI(null);
+      return;
+    }
+    if (auth.stale) {
+      updateUI(auth);
       return;
     }
     const tab = await getActiveTab();
