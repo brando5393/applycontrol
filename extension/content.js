@@ -73,7 +73,7 @@ function findActiveCard() {
   // card (a save/quick-apply button) carries aria-selected="true" at all
   // times, which would otherwise be mistaken for "the viewed job".
   const activeSelectorGroups = [
-    ".selected, .active, .is-active, .job-selected, .card-selected",
+    ".selected, .active, .is-active, .job-selected, .card-selected, .vjs-highlight",
     "[aria-selected='true'], [aria-current='true'], [data-selected='true'], [data-current='true']"
   ];
   for (const group of activeSelectorGroups) {
@@ -201,14 +201,21 @@ function getText(selector) {
 
 function extractIndeed() {
   return {
+    // Indeed's split list+detail view renders the job title as an <h2>
+    // (matched by data-testid), not the <h1> the standalone job page uses;
+    // the generic "h1" fallback below matches the *search results* heading
+    // in that layout, so it must stay last, not first.
     title:
+      getText("[data-testid='jobsearch-JobInfoHeader-title']") ||
       getText("h1.jobsearch-JobInfoHeader-title") ||
       getText("h1"),
     company:
+      getText("[data-testid='inlineHeader-companyName']") ||
       getText("[data-company-name]") ||
       getText(".jobsearch-InlineCompanyRating div:first-child") ||
       getText(".jobsearch-CompanyInfoWithoutHeaderImage div:first-child"),
     location:
+      getText("[data-testid='inlineHeader-companyLocation']") ||
       getText(".jobsearch-JobInfoHeader-subtitle .jobsearch-JobInfoHeader-subtitle-location") ||
       getText(".jobsearch-CompanyInfoWithoutHeaderImage div:nth-child(2)"),
     description:
