@@ -1,4 +1,7 @@
-const config = window.APPLYCONTROL_CONFIG || {};
+// config, STORAGE_KEY, REMEMBER_KEY, and all auth/session helpers
+// (loadAuth/saveAuth/clearAuth/loadRemember/signUp/signIn/refreshToken/
+// getValidAuth/sendPasswordReset/signInWithGoogle) live in lib/auth.js,
+// loaded before this file -- see manifest.json / popup.html.
 
 const el = {
   authSection: document.getElementById("auth-section"),
@@ -9,8 +12,12 @@ const el = {
   signIn: document.getElementById("sign-in"),
   signUp: document.getElementById("sign-up"),
   signOut: document.getElementById("sign-out"),
+  forgotPassword: document.getElementById("forgot-password"),
+  googleSignIn: document.getElementById("google-sign-in"),
   openDashboard: document.getElementById("open-dashboard"),
   capture: document.getElementById("capture"),
+  verifySection: document.getElementById("verify-section"),
+  resendVerify: document.getElementById("resend-verify"),
   helpToggle: document.getElementById("help-toggle"),
   helpPanel: document.getElementById("help-panel"),
   version: document.getElementById("version"),
@@ -25,8 +32,6 @@ const el = {
   userLabel: document.getElementById("user-label")
 };
 
-const STORAGE_KEY = "applycontrol_auth";
-const REMEMBER_KEY = "applycontrol_remember";
 const ONBOARDED_KEY = "applycontrol_onboarded";
 
 function setStatus(message, isError = false) {
@@ -46,125 +51,6 @@ function requireConfig() {
     return false;
   }
   return true;
-}
-
-function loadAuth() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([STORAGE_KEY], (result) => {
-      resolve(result[STORAGE_KEY] || null);
-    });
-  });
-}
-
-function saveAuth(data, remember) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ [REMEMBER_KEY]: remember }, () => {
-      chrome.storage.local.set({ [STORAGE_KEY]: { ...data, sessionOnly: !remember } }, resolve);
-    });
-  });
-}
-
-function clearAuth() {
-  return new Promise((resolve) => {
-    chrome.storage.local.remove([STORAGE_KEY, REMEMBER_KEY], resolve);
-  });
-}
-
-function loadRemember() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([REMEMBER_KEY], (result) => {
-      if (typeof result[REMEMBER_KEY] === "boolean") {
-        resolve(result[REMEMBER_KEY]);
-      } else {
-        resolve(true);
-      }
-    });
-  });
-}
-
-async function signUp(email, password) {
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${config.firebaseApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, returnSecureToken: true })
-    }
-  );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data && data.error && data.error.message
-      ? data.error.message
-      : "Sign up failed.";
-    throw new Error(msg);
-  }
-  return data;
-}
-
-async function signIn(email, password) {
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${config.firebaseApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, returnSecureToken: true })
-    }
-  );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data && data.error && data.error.message
-      ? data.error.message
-      : "Sign in failed.";
-    throw new Error(msg);
-  }
-  return data;
-}
-
-async function refreshToken(refreshTokenValue) {
-  const res = await fetch(
-    `https://securetoken.googleapis.com/v1/token?key=${config.firebaseApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(
-        refreshTokenValue
-      )}`
-    }
-  );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data && data.error && data.error.message
-      ? data.error.message
-      : "Token refresh failed.";
-    throw new Error(msg);
-  }
-  return data;
-}
-
-async function getValidAuth() {
-  const auth = await loadAuth();
-  if (!auth) return null;
-  const now = Date.now();
-  if (auth.expiresAt && auth.expiresAt - now > 60 * 1000) return auth;
-  try {
-    const refreshed = await refreshToken(auth.refreshToken);
-    const expiresAt = Date.now() + Number(refreshed.expires_in) * 1000;
-    const updated = {
-      ...auth,
-      idToken: refreshed.id_token,
-      refreshToken: refreshed.refresh_token,
-      expiresAt,
-      stale: false
-    };
-    const remember = await loadRemember();
-    await saveAuth(updated, remember);
-    return updated;
-  } catch {
-    // Refresh token itself expired/revoked (e.g. password changed
-    // elsewhere, or the session simply aged out) -- distinct from "not
-    // signed in at all" so the UI can say why capture just stopped working.
-    return { ...auth, stale: true };
-  }
 }
 
 async function saveApplication(auth, payload) {
@@ -280,11 +166,23 @@ async function isJobPage(tabId) {
   });
 }
 
+async function checkEmailVerification(auth) {
+  if (!el.verifySection || !auth || auth.stale) return;
+  try {
+    const info = await fetchAccountInfo(auth.idToken);
+    const verified = !!(info && info.emailVerified);
+    el.verifySection.classList.toggle("hidden", verified);
+  } catch {
+    // Non-critical -- a failed lookup shouldn't block using the popup.
+  }
+}
+
 async function init() {
   if (!requireConfig()) return;
   el.rememberMe.checked = await loadRemember();
   const auth = await getValidAuth().catch(() => null);
   updateUI(auth);
+  if (auth && !auth.stale) await checkEmailVerification(auth);
   if (el.version && chrome.runtime && chrome.runtime.getManifest) {
     el.version.textContent = chrome.runtime.getManifest().version || "n/a";
   }
@@ -311,17 +209,16 @@ el.signUp.addEventListener("click", async () => {
   setStatus("Signing up...");
   try {
     const data = await signUp(el.email.value, el.password.value);
-    const expiresAt = Date.now() + Number(data.expiresIn) * 1000;
-    const auth = {
-      email: data.email,
-      localId: data.localId,
-      idToken: data.idToken,
-      refreshToken: data.refreshToken,
-      expiresAt
-    };
+    const auth = buildAuthFromAuthResponse(data);
     await saveAuth(auth, el.rememberMe.checked);
     updateUI(auth);
     setStatus("Signed up.");
+    try {
+      await sendEmailVerification(auth.idToken);
+    } catch {
+      // Best-effort -- a new account is still usable if this fails.
+    }
+    await checkEmailVerification(auth);
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -332,17 +229,11 @@ el.signIn.addEventListener("click", async () => {
   setStatus("Signing in...");
   try {
     const data = await signIn(el.email.value, el.password.value);
-    const expiresAt = Date.now() + Number(data.expiresIn) * 1000;
-    const auth = {
-      email: data.email,
-      localId: data.localId,
-      idToken: data.idToken,
-      refreshToken: data.refreshToken,
-      expiresAt
-    };
+    const auth = buildAuthFromAuthResponse(data);
     await saveAuth(auth, el.rememberMe.checked);
     updateUI(auth);
     setStatus("Signed in.");
+    await checkEmailVerification(auth);
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -354,6 +245,41 @@ el.signOut.addEventListener("click", async () => {
   setStatus("Signed out.");
 });
 
+if (el.forgotPassword) {
+  el.forgotPassword.addEventListener("click", async () => {
+    if (!requireConfig()) return;
+    const email = el.email.value.trim();
+    if (!email) {
+      setStatus("Enter your email above first, then click \"Forgot password?\"", true);
+      return;
+    }
+    setStatus("Sending password reset email...");
+    try {
+      await sendPasswordReset(email);
+      setStatus("Password reset email sent. Check your inbox.");
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+}
+
+if (el.googleSignIn) {
+  el.googleSignIn.addEventListener("click", async () => {
+    if (!requireConfig()) return;
+    setStatus("Signing in with Google...");
+    try {
+      const data = await signInWithGoogle();
+      const auth = buildAuthFromAuthResponse(data);
+      await saveAuth(auth, el.rememberMe.checked);
+      updateUI(auth);
+      setStatus("Signed in.");
+      await checkEmailVerification(auth);
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+}
+
 el.openDashboard.addEventListener("click", () => {
   if (chrome.runtime && chrome.runtime.openOptionsPage) {
     chrome.runtime.openOptionsPage();
@@ -361,6 +287,23 @@ el.openDashboard.addEventListener("click", () => {
     chrome.tabs.create({ url: chrome.runtime.getURL("dashboard.html") });
   }
 });
+
+if (el.resendVerify) {
+  el.resendVerify.addEventListener("click", async () => {
+    const auth = await getValidAuth().catch(() => null);
+    if (!auth || auth.stale) {
+      setStatus("Please sign in again.", true);
+      return;
+    }
+    setStatus("Sending verification email...");
+    try {
+      await sendEmailVerification(auth.idToken);
+      setStatus("Verification email sent. Check your inbox.");
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+}
 
 function isOnboarded() {
   return new Promise((resolve) => {

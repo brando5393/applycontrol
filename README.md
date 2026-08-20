@@ -35,7 +35,7 @@ Runs on every push/PR to `main` via `.github/workflows/test.yml`. See `RELEASING
 
 ## Firebase Setup
 1. Create a Firebase project.
-2. Enable **Authentication → Email/Password**.
+2. Enable **Authentication → Email/Password**. Also enable **Authentication → Google** if you want Google Sign-In (see "Google Sign-In Setup" below) — it's optional and additive to email/password, not a replacement.
 3. Create **Firestore** in production or test mode.
 4. In Firestore, add rules to restrict data by `user_id`.
 
@@ -61,6 +61,18 @@ service cloud.firestore {
 ## Configure
 Copy and fill in the config file:
 - `extension/config.js` from `extension/config.example.js`
+
+## Google Sign-In Setup
+Email/password sign-in works out of the box once Firebase config is filled in. Google Sign-In is an **additional** option next to it (both are always shown), and needs one extra piece of setup Chrome requires to be static in `manifest.json` rather than loaded from `config.js`:
+
+1. Load the extension unpacked once first (see "Load Extension" below) and note its ID from `chrome://extensions`.
+2. In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials) for the **same project as your Firebase project** (Firebase projects are Google Cloud projects), go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**.
+3. Application type: **Chrome Extension**. Paste in the extension ID from step 1.
+4. Create it — you'll get a Client ID (no client secret is needed or used for this flow).
+5. Paste that ID into `extension/manifest.json`'s `"oauth2"."client_id"` field, replacing the placeholder.
+6. Reload the unpacked extension (`chrome://extensions` → Reload) and try "Sign in with Google."
+
+Note: an unpacked extension's ID normally changes if you remove and re-add it, which would break step 3's registration. If that happens, either update the OAuth client's registered ID to match, or pin a stable ID by adding a `"key"` field to `manifest.json` (see [Chrome's docs on extension IDs](https://developer.chrome.com/docs/extensions/reference/manifest/key)).
 
 ## Privacy Policy
 See `PRIVACY_POLICY.md`.

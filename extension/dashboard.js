@@ -1,4 +1,7 @@
-const config = window.APPLYCONTROL_CONFIG || {};
+// config, STORAGE_KEY, REMEMBER_KEY, and all auth/session helpers
+// (loadAuth/saveAuth/clearAuth/loadRemember/signUp/signIn/refreshToken/
+// getValidAuth/sendPasswordReset/signInWithGoogle) live in lib/auth.js,
+// loaded before this file -- see manifest.json / dashboard.html.
 
 const el = {
   authSection: document.getElementById("auth-section"),
@@ -9,6 +12,8 @@ const el = {
   signIn: document.getElementById("sign-in"),
   signUp: document.getElementById("sign-up"),
   signOut: document.getElementById("sign-out"),
+  forgotPassword: document.getElementById("forgot-password"),
+  googleSignIn: document.getElementById("google-sign-in"),
   authStatus: document.getElementById("auth-status"),
   list: document.getElementById("list"),
   search: document.getElementById("search"),
@@ -53,8 +58,6 @@ const el = {
   feedbackStatus: document.getElementById("feedback-status")
 };
 
-const STORAGE_KEY = "applycontrol_auth";
-const REMEMBER_KEY = "applycontrol_remember";
 const STATUS_OPTIONS = [
   "all",
   "applied",
@@ -105,122 +108,6 @@ function requireConfig() {
     return false;
   }
   return true;
-}
-
-function loadAuth() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([STORAGE_KEY], (result) => {
-      resolve(result[STORAGE_KEY] || null);
-    });
-  });
-}
-
-function saveAuth(data, remember) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ [REMEMBER_KEY]: remember }, () => {
-      chrome.storage.local.set({ [STORAGE_KEY]: { ...data, sessionOnly: !remember } }, resolve);
-    });
-  });
-}
-
-function clearAuth() {
-  return new Promise((resolve) => {
-    chrome.storage.local.remove([STORAGE_KEY, REMEMBER_KEY], resolve);
-  });
-}
-
-function loadRemember() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([REMEMBER_KEY], (result) => {
-      if (typeof result[REMEMBER_KEY] === "boolean") {
-        resolve(result[REMEMBER_KEY]);
-      } else {
-        resolve(true);
-      }
-    });
-  });
-}
-
-async function signUp(email, password) {
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${config.firebaseApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, returnSecureToken: true })
-    }
-  );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data && data.error && data.error.message
-      ? data.error.message
-      : "Sign up failed.";
-    throw new Error(msg);
-  }
-  return data;
-}
-
-async function signIn(email, password) {
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${config.firebaseApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, returnSecureToken: true })
-    }
-  );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data && data.error && data.error.message
-      ? data.error.message
-      : "Sign in failed.";
-    throw new Error(msg);
-  }
-  return data;
-}
-
-async function refreshToken(refreshTokenValue) {
-  const res = await fetch(
-    `https://securetoken.googleapis.com/v1/token?key=${config.firebaseApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(
-        refreshTokenValue
-      )}`
-    }
-  );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data && data.error && data.error.message
-      ? data.error.message
-      : "Token refresh failed.";
-    throw new Error(msg);
-  }
-  return data;
-}
-
-async function getValidAuth() {
-  const auth = await loadAuth();
-  if (!auth) return null;
-  const now = Date.now();
-  if (auth.expiresAt && auth.expiresAt - now > 60 * 1000) return auth;
-  try {
-    const refreshed = await refreshToken(auth.refreshToken);
-    const expiresAt = Date.now() + Number(refreshed.expires_in) * 1000;
-    const updated = {
-      ...auth,
-      idToken: refreshed.id_token,
-      refreshToken: refreshed.refresh_token,
-      expiresAt,
-      stale: false
-    };
-    const remember = await loadRemember();
-    await saveAuth(updated, remember);
-    return updated;
-  } catch {
-    return { ...auth, stale: true };
-  }
 }
 
 function updateUI(auth) {
@@ -869,18 +756,12 @@ el.signUp.addEventListener("click", async () => {
   setAuthStatus("Signing up...");
   try {
     const data = await signUp(el.email.value, el.password.value);
-    const expiresAt = Date.now() + Number(data.expiresIn) * 1000;
-    const auth = {
-      email: data.email,
-      localId: data.localId,
-      idToken: data.idToken,
-      refreshToken: data.refreshToken,
-      expiresAt
-    };
+    const auth = buildAuthFromAuthResponse(data);
     await saveAuth(auth, el.rememberMe.checked);
     updateUI(auth);
     setAuthStatus("Signed up.");
     await fetchApplications(auth);
+    ensurePolling();
   } catch (err) {
     setAuthStatus(err.message, true);
   }
@@ -890,18 +771,12 @@ el.signIn.addEventListener("click", async () => {
   setAuthStatus("Signing in...");
   try {
     const data = await signIn(el.email.value, el.password.value);
-    const expiresAt = Date.now() + Number(data.expiresIn) * 1000;
-    const auth = {
-      email: data.email,
-      localId: data.localId,
-      idToken: data.idToken,
-      refreshToken: data.refreshToken,
-      expiresAt
-    };
+    const auth = buildAuthFromAuthResponse(data);
     await saveAuth(auth, el.rememberMe.checked);
     updateUI(auth);
     setAuthStatus("Signed in.");
     await fetchApplications(auth);
+    ensurePolling();
   } catch (err) {
     setAuthStatus(err.message, true);
   }
@@ -913,7 +788,44 @@ el.signOut.addEventListener("click", async () => {
   setAuthStatus("Signed out.");
   cachedApps = [];
   renderList();
+  stopPolling();
 });
+
+if (el.forgotPassword) {
+  el.forgotPassword.addEventListener("click", async () => {
+    if (!requireConfig()) return;
+    const email = el.email.value.trim();
+    if (!email) {
+      setAuthStatus("Enter your email above first, then click \"Forgot password?\"", true);
+      return;
+    }
+    setAuthStatus("Sending password reset email...");
+    try {
+      await sendPasswordReset(email);
+      setAuthStatus("Password reset email sent. Check your inbox.");
+    } catch (err) {
+      setAuthStatus(err.message, true);
+    }
+  });
+}
+
+if (el.googleSignIn) {
+  el.googleSignIn.addEventListener("click", async () => {
+    if (!requireConfig()) return;
+    setAuthStatus("Signing in with Google...");
+    try {
+      const data = await signInWithGoogle();
+      const auth = buildAuthFromAuthResponse(data);
+      await saveAuth(auth, el.rememberMe.checked);
+      updateUI(auth);
+      setAuthStatus("Signed in.");
+      await fetchApplications(auth);
+      ensurePolling();
+    } catch (err) {
+      setAuthStatus(err.message, true);
+    }
+  });
+}
 
 if (el.clearAll) el.clearAll.addEventListener("click", openModal);
 if (el.modalCancel) el.modalCancel.addEventListener("click", closeModal);
@@ -970,6 +882,9 @@ if (el.deleteConfirm) el.deleteConfirm.addEventListener("click", async () => {
     closeDeleteModal();
     updateUI(null);
     setAuthStatus("Account deleted.");
+    cachedApps = [];
+    renderList();
+    stopPolling();
     showToast("Account and all data deleted.");
     openDeleteSuccessModal();
   } catch (err) {
@@ -991,33 +906,55 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function ensurePolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    const freshAuth = await getValidAuth().catch(() => null);
+    // Every tick reflects state through the same path init()/sign-in/
+    // sign-out use, so a session that goes stale in the background (not
+    // via an explicit sign-out click) doesn't leave the dashboard silently
+    // showing "signed in" chrome and stale data with nothing actually
+    // syncing anymore.
+    updateUI(freshAuth);
+    if (freshAuth && !freshAuth.stale) {
+      await fetchApplications(freshAuth);
+    } else {
+      cachedApps = [];
+      renderList();
+      stopPolling();
+    }
+  }, 30000);
+}
+
 async function init() {
   if (!requireConfig()) return;
   renderStatusFilters();
   el.rememberMe.checked = await loadRemember();
   const auth = await getValidAuth().catch(() => null);
   updateUI(auth);
-  if (auth) {
+  if (auth && !auth.stale) {
     await fetchApplications(auth);
-    if (!pollTimer) {
-      pollTimer = setInterval(async () => {
-        const freshAuth = await getValidAuth().catch(() => null);
-        if (freshAuth) {
-          await fetchApplications(freshAuth);
-        }
-      }, 30000);
-    }
+    ensurePolling();
   }
 }
 
 async function handleAuthChange() {
   const auth = await getValidAuth().catch(() => null);
   updateUI(auth);
-  if (auth) {
+  if (auth && !auth.stale) {
     await fetchApplications(auth);
+    ensurePolling();
   } else {
     cachedApps = [];
     renderList();
+    stopPolling();
   }
 }
 
@@ -1026,7 +963,13 @@ init();
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible") return;
   const auth = await getValidAuth().catch(() => null);
-  if (auth) await fetchApplications(auth);
+  updateUI(auth);
+  if (auth && !auth.stale) {
+    await fetchApplications(auth);
+    ensurePolling();
+  } else {
+    stopPolling();
+  }
 });
 
 if (chrome.storage && chrome.storage.onChanged) {
