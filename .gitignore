@@ -15,3 +15,6 @@ firestore-debug.log
 
 # Node (test tooling)
 node_modules/
+
+# Local-only notes
+OAUTH_WORKFLOW_FIX.md
