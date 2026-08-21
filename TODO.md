@@ -51,7 +51,7 @@ Format is optimized for AI agents.
 
 ## Pending / Next
 - [ ] Extend list-page URL detection to Glassdoor and ZipRecruiter once their real search-results URL shape is confirmed (their URLs don't follow the `/jobs/` convention the other boards use, so they were left out of `isListPageUrl()` rather than guessed at).
-- [ ] Google Sign-In is code-complete but unverified live: needs a real Google Cloud OAuth client ID (see README.md's "Google Sign-In Setup") before it can actually be tested end-to-end in a browser.
+- [~] Google Sign-In setup, in progress: Firebase Console → Authentication → Sign-in method → **Google provider enabled** (2026-08-20). Still needed before it's live-testable: create a Google Cloud OAuth client (Credentials → Create Credentials → OAuth client ID → type "Chrome Extension" → the unpacked extension's ID from `chrome://extensions`) in the same GCP project as Firebase, then paste that client ID into `extension/manifest.json`'s `oauth2.client_id` (currently the `REPLACE_WITH_YOUR_GOOGLE_OAUTH_CLIENT_ID...` placeholder) and reload the unpacked extension. Full walkthrough in README.md's "Google Sign-In Setup". Once both pieces are in place, test "Sign in with Google" live in the browser the same way the capture bugs were verified this session.
 - [ ] Add optional company research enrichments (reviews, history) via external sources (requires API plan).
 - [ ] Have the privacy policy reviewed by an actual attorney before Chrome Web Store submission or wide distribution — see the disclaimer at the bottom of `PRIVACY_POLICY.md`.
 
