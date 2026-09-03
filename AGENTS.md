@@ -4,7 +4,7 @@
 ApplyControl is a browser-extension-first job application tracker.
 - MV3 extension captures job data from job boards.
 - The dashboard (extension options page) lists and manages applications. There is no separate static/hosted dashboard — a prior static `dashboard/` copy was retired because it had drifted onto a different (Firebase SDK) auth path and was missing features the extension dashboard had gained.
-- Firebase Auth (Email/Password) + Firestore REST provide cross-device sync.
+- Firebase Auth (Email/Password, plus optional Google Sign-In) + Firestore REST provide cross-device sync.
 
 ## Repository Layout
 - `extension/` MV3 extension (popup, content scripts, dashboard options page).
@@ -28,8 +28,8 @@ ApplyControl is a browser-extension-first job application tracker.
 
 ## Common Commands
 - Load extension:
-  - Chrome/Edge: `chrome://extensions` ? Developer mode ? Load unpacked ? select `extension/`
-  - Firefox: `about:debugging#/runtime/this-firefox` ? Load Temporary Add-on ? select `extension/manifest.json`
+  - Chrome/Edge: `chrome://extensions` → Developer mode → Load unpacked → select `extension/`
+  - Firefox: `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → select `extension/manifest.json`
 - Run tests: `npm install && npm test` (see `RELEASING.md` for the version-bump process)
 
 ## Code Conventions
